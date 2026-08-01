@@ -17,3 +17,5 @@ Makefile.example
 
 Dockerfile
 .dockerignore
+
+setup.sh

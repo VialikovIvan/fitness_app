@@ -21,8 +21,16 @@ An application for managing fitness club access with integrated payment system.
 git clone https://github.com/VialikovIvan/fitness_app.git
 cd fitness_app
 ```
+### 2. Copy and edit the environment file.
 
-### 2. Run with Docker.
+Linux/Mac/Windows(Git Bash):
+
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+### 3. Run with Docker.
 
 ```bash
 docker compose up --build
