@@ -13,7 +13,7 @@ An application for managing fitness club access with integrated payment system.
 
 - Docker
 
-## Quick start
+## First start
 
 ### 1. Clone the repository.
 
@@ -21,7 +21,7 @@ An application for managing fitness club access with integrated payment system.
 git clone https://github.com/VialikovIvan/fitness_app.git
 cd fitness_app
 ```
-### 2. Copy and edit the environment file.
+### 2. Run the setup script
 
 Linux/Mac/Windows(Git Bash):
 
@@ -30,8 +30,8 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-### 3. Run with Docker.
+## Following starts
 
 ```bash
-docker compose up --build
+docker compose up
 ```
