@@ -6,9 +6,12 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
-	"github.com/VialikovIvan/fitness_app/internal/config"
-	"github.com/VialikovIvan/fitness_app/internal/transport"
-	"github.com/VialikovIvan/fitness_app/internal/repository"
+	"github.com/VialikovIvan/fitness_app/internal/infrastructure/config"
+	"github.com/VialikovIvan/fitness_app/internal/infrastructure/postgres"
+	myhttp "github.com/VialikovIvan/fitness_app/internal/infrastructure/http"
+
+	healthservice "github.com/VialikovIvan/fitness_app/internal/health/service"
+	healthtransport "github.com/VialikovIvan/fitness_app/internal/health/transport"
 )
 
 func main() {
@@ -24,14 +27,17 @@ func main() {
 		log.Fatal(err)
 	}
 
-	db, err := repository.InitDB(cfg.DBURL)
+	db, err := postgres.InitDB(cfg.DBURL)
 	if err != nil {
 		log.Fatal("Database connection error: ", err)
 	}
 
-	defer repository.CloseDB(db)
+	defer postgres.CloseDB(db)
 
-	server := transport.NewServer(cfg.Port)
+	service := healthservice.NewService()
+	handler := healthtransport.NewHandler(service)
+
+	server := myhttp.NewServer(cfg.Port, handler)
 
 	if err := server.ListenAndServe(); err != nil {
 		slog.Error("Server error:", slog.Any("err", err))
