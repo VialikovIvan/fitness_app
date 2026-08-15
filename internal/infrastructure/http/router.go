@@ -9,7 +9,7 @@ import (
 func setupRouter(h *healthtransport.Handler) http.Handler {
 	mux := http.NewServeMux()
 	
-	mux.HandleFunc("/health", h.HealthHandler)
+	mux.HandleFunc("GET /health", h.HealthHandler)
 
 	return mux
 }
