@@ -14,20 +14,20 @@ type Handler struct {
 	service HealthService
 }
 
-type HealthResponse struct {
+type healthResponse struct {
 	Status string `json:"status"`
 }
 
-func NewHandler(service HealthService) *Handler {
+func New(svc HealthService) *Handler {
 	return &Handler{
-		service: service,
+		service: svc,
 	}
 }
 
-func (h *Handler) HealthHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	_ = h.service.CheckHealth()
 
-	resp := HealthResponse{
+	resp := healthResponse{
 		Status: "ok",
 	}
 

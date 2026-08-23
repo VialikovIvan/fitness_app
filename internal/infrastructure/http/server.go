@@ -2,13 +2,9 @@ package http
 
 import (
 	"net/http"
-
-	healthtransport "github.com/VialikovIvan/fitness_app/internal/health/transport"
 )
 
-func NewServer(port string, h *healthtransport.Handler) *http.Server {
-	router := setupRouter(h)
-
+func NewServer(port string, router http.Handler) *http.Server {
 	server := &http.Server{
 		Addr: ":"+port,
 		Handler: router,

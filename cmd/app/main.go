@@ -5,13 +5,12 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/joho/godotenv"
 	"github.com/VialikovIvan/fitness_app/internal/infrastructure/config"
-	"github.com/VialikovIvan/fitness_app/internal/infrastructure/postgres"
 	myhttp "github.com/VialikovIvan/fitness_app/internal/infrastructure/http"
+	"github.com/VialikovIvan/fitness_app/internal/infrastructure/postgres"
+	"github.com/joho/godotenv"
 
-	healthservice "github.com/VialikovIvan/fitness_app/internal/health/service"
-	healthtransport "github.com/VialikovIvan/fitness_app/internal/health/transport"
+	"github.com/VialikovIvan/fitness_app/internal/health"
 )
 
 func main() {
@@ -34,10 +33,10 @@ func main() {
 
 	defer postgres.CloseDB(db)
 
-	service := healthservice.NewService()
-	handler := healthtransport.NewHandler(service)
+	healthHandler := health.New()
 
-	server := myhttp.NewServer(cfg.Port, handler)
+	router := myhttp.SetupRouter(healthHandler)
+	server := myhttp.NewServer(cfg.Port, router)
 
 	if err := server.ListenAndServe(); err != nil {
 		slog.Error("Server error:", slog.Any("err", err))

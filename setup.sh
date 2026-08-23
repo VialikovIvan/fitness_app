@@ -7,9 +7,8 @@ if [ -f .env ]; then
 fi
 
 cp .env.example .env
-
 read -p "Enter your preferred database password: " DB_PASSWORD
-sed -i "s/your_password_here/$DB_PASSWORD/g" .env
+sed -i "s|your_password_here|$DB_PASSWORD|g" .env
 echo ".env configured! Proceeding to the next step.."
 
 docker compose up --build -d
