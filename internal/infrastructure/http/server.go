@@ -6,7 +6,7 @@ import (
 
 func NewServer(port string, router http.Handler) *http.Server {
 	server := &http.Server{
-		Addr: ":"+port,
+		Addr:    ":" + port,
 		Handler: router,
 	}
 

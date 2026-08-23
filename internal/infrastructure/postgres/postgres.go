@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -11,7 +10,7 @@ import (
 func InitDB(connString string) (*pgxpool.Pool, error) {
 	config, err := pgxpool.ParseConfig(connString)
 	if err != nil {
-		return  nil, err
+		return nil, err
 	}
 
 	const maxConns = 25
@@ -31,7 +30,6 @@ func InitDB(connString string) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 
-	slog.Info("Successfully connected to database!")
 	return db, nil
 }
 

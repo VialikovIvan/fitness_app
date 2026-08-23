@@ -1,9 +1,14 @@
 package main
 
 import (
-	"log"
+	"context"
+	"errors"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/VialikovIvan/fitness_app/internal/infrastructure/config"
 	myhttp "github.com/VialikovIvan/fitness_app/internal/infrastructure/http"
@@ -11,34 +16,65 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/VialikovIvan/fitness_app/internal/health"
+	"github.com/VialikovIvan/fitness_app/internal/user"
 )
 
+const shutdownTimeout = 10 * time.Second
+
 func main() {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
 	if _, err := os.Stat("../../.env"); err == nil {
 		err := godotenv.Load("../../.env")
 		if err != nil {
-			log.Fatal(".env file loading error: ", err)
+			logger.Error(".env file loading error", slog.Any("err", err))
+			os.Exit(1)
 		}
 	}
 
 	cfg, err := config.NewConfig()
 	if err != nil {
-		log.Fatal(err)
+		logger.Error("config loading error", slog.Any("err", err))
+		os.Exit(1)
 	}
+	logger.Info("config loaded")
 
 	db, err := postgres.InitDB(cfg.DBURL)
 	if err != nil {
-		log.Fatal("Database connection error: ", err)
+		logger.Error("database connection error", slog.Any("err", err))
+		os.Exit(1)
 	}
+	logger.Info("database connection established")
 
 	defer postgres.CloseDB(db)
 
 	healthHandler := health.New()
+	userHandler := user.New(db, cfg.JWTSecret, logger)
 
-	router := myhttp.SetupRouter(healthHandler)
+	router := myhttp.SetupRouter(healthHandler, userHandler)
 	server := myhttp.NewServer(cfg.Port, router)
 
-	if err := server.ListenAndServe(); err != nil {
-		slog.Error("Server error:", slog.Any("err", err))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		logger.Info("server starting", "addr", server.Addr)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("server error", slog.Any("err", err))
+			os.Exit(1)
+		}
+	}()
+
+	<-ctx.Done()
+	logger.Info("shutdown signal received")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		logger.Error("graceful shutdown forced", slog.Any("err", err))
+
 	}
+
+	logger.Info("server successfully stopped")
 }

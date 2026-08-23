@@ -7,6 +7,8 @@ if [ -f .env ]; then
 fi
 
 cp .env.example .env
+sed -i "s|your_jwt_secret_here|$(openssl rand -base64 32)|g" .env
+echo "jwt secret set! Proceeding to the next step.."
 read -p "Enter your preferred database password: " DB_PASSWORD
 sed -i "s|your_password_here|$DB_PASSWORD|g" .env
 echo ".env configured! Proceeding to the next step.."
