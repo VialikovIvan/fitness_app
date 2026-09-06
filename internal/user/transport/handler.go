@@ -15,6 +15,7 @@ const cookieValidityTime = 24 * time.Hour
 
 type AuthService interface {
 	Register(ctx context.Context, user domain.User, plainPassword string) (string, error)
+	Login(ctx context.Context, user domain.User, plainPassword string) (string, error)
 }
 
 type Validator interface {
@@ -43,7 +44,12 @@ type registerRequest struct {
 	Email      string `json:"email" validate:"required,email,max=255"`
 }
 
-type registerResponse struct {
+type loginRequest struct {
+	Password string `json:"password" validate:"required,min=8,max=72"`
+	Email    string `json:"email" validate:"required,email,max=255"`
+}
+
+type tokenResponse struct {
 	Token string `json:"token"`
 }
 
@@ -102,7 +108,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, &cookie)
 
-	resp := registerResponse{
+	resp := tokenResponse{
 		Token: token,
 	}
 
@@ -118,25 +124,98 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	logger.Info("user registered successfully")
 }
 
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	logger := h.logger
+
+	rawTraceID := r.Context().Value("traceID")
+	if rawTraceID != nil {
+		if traceID, ok := rawTraceID.(string); ok {
+			logger = h.logger.With("traceID", traceID)
+		}
+	}
+
+	logger.Info("login request received")
+
+	var req loginRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		logger.Warn("failed to decode request", "err", err)
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	err = h.validate.Struct(req)
+	if err != nil {
+		logger.Warn("received invalid data", "err", err)
+		http.Error(w, "Invalid data", http.StatusBadRequest)
+		return
+	}
+
+	user := domain.User{
+		Email: req.Email,
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	token, err := h.service.Login(ctx, user, req.Password)
+	if err != nil {
+		handleServiceError(w, err, logger)
+		return
+	}
+
+	cookie := http.Cookie{
+		Name:     "authToken",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		Expires:  time.Now().Add(cookieValidityTime),
+	}
+
+	http.SetCookie(w, &cookie)
+
+	resp := tokenResponse{
+		Token: token,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	err = json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		logger.Error("failed to encode response", "err", err)
+		return
+	}
+
+	logger.Info("user logged in successfully")
+}
+
 func handleServiceError(w http.ResponseWriter, err error, logger *slog.Logger) {
-	if errors.Is(err, domain.ErrUserAlreadyExists) {
+	switch {
+	case errors.Is(err, domain.ErrUserAlreadyExists):
 		logger.Warn("user already exists")
 		http.Error(w, err.Error(), http.StatusConflict)
-		return
-	}
 
-	if errors.Is(err, domain.ErrInvalidPasswordLength) {
+	case errors.Is(err, domain.ErrUserDoesNotExist):
+		logger.Warn("user does not exist")
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+
+	case errors.Is(err, domain.ErrInvalidPassword):
+		logger.Warn("invalid password")
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+
+	case errors.Is(err, domain.ErrInvalidPasswordLength):
 		logger.Warn("invalid password length")
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-		return
-	}
 
-	if errors.Is(err, domain.ErrInvalidEmailFormat) {
+	case errors.Is(err, domain.ErrInvalidEmailFormat):
 		logger.Warn("invalid email format")
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-		return
-	}
 
-	logger.Error("unexpected error", "err", err)
-	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	default:
+		logger.Error("unexpected error", "err", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 }

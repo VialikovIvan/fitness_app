@@ -13,6 +13,8 @@ const (
 
 var (
 	ErrUserAlreadyExists     = errors.New("user already exists")
+	ErrUserDoesNotExist      = errors.New("user does not exist")
+	ErrInvalidPassword       = errors.New("invalid password")
 	ErrInvalidPasswordLength = errors.New("invalid password length")
 	ErrInvalidEmailFormat    = errors.New("invalid email format")
 )

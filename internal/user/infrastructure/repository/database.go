@@ -58,3 +58,24 @@ func (p *PostgresRepository) Create(ctx context.Context, u domain.User, hash str
 
 	return user.ID, nil
 }
+
+func (p *PostgresRepository) GetIDAndHashByEmail(ctx context.Context, email string) (int64, string, error) {
+	user := postgresUser{
+		Email: email,
+	}
+
+	err := p.db.QueryRow(ctx, `
+	SELECT id, password_hash FROM users
+	WHERE email = $1
+	`, user.Email,
+	).Scan(&user.ID, &user.PasswordHash)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, "", domain.ErrUserDoesNotExist
+		}
+		return 0, "", err
+	}
+
+	return user.ID, user.PasswordHash, nil
+}

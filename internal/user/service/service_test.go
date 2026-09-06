@@ -10,19 +10,29 @@ import (
 )
 
 type MockRepo struct {
-	CreateFunc func(ctx context.Context, u domain.User, hash string) (int64, error)
+	CreateFunc              func(ctx context.Context, u domain.User, hash string) (int64, error)
+	GetIDAndHashByEmailFunc func(ctx context.Context, email string) (int64, string, error)
 }
 
 func (m *MockRepo) Create(ctx context.Context, u domain.User, hash string) (int64, error) {
 	return m.CreateFunc(ctx, u, hash)
 }
 
-type MockPWHasher struct {
-	HashFunc func(ctx context.Context, plainPassword string) (string, error)
+func (m *MockRepo) GetIDAndHashByEmail(ctx context.Context, email string) (int64, string, error) {
+	return m.GetIDAndHashByEmailFunc(ctx, email)
 }
 
-func (m *MockPWHasher) Hash(ctx context.Context, plainPassword string) (string, error) {
+type MockPWManager struct {
+	HashFunc   func(ctx context.Context, plainPassword string) (string, error)
+	VerifyFunc func(encoded, providedPassword string) (bool, error)
+}
+
+func (m *MockPWManager) Hash(ctx context.Context, plainPassword string) (string, error) {
 	return m.HashFunc(ctx, plainPassword)
+}
+
+func (m *MockPWManager) Verify(encoded, providedPassword string) (bool, error) {
+	return m.VerifyFunc(encoded, providedPassword)
 }
 
 type MockTKGenerator struct {
@@ -39,7 +49,7 @@ func TestService_Register(t *testing.T) {
 		u             domain.User
 		plainPassword string
 		r             service.UserRepository
-		h             service.PasswordHasher
+		p             service.PasswordManager
 		t             service.TokenGenerator
 		want          string
 		wantErr       bool
@@ -58,7 +68,7 @@ func TestService_Register(t *testing.T) {
 					return 1, nil
 				},
 			},
-			h: &MockPWHasher{
+			p: &MockPWManager{
 				HashFunc: func(ctx context.Context, plainPassword string) (string, error) {
 					return "aFakePasswordHash", nil
 				},
@@ -85,7 +95,7 @@ func TestService_Register(t *testing.T) {
 					return 1, nil
 				},
 			},
-			h: &MockPWHasher{
+			p: &MockPWManager{
 				HashFunc: func(ctx context.Context, plainPassword string) (string, error) {
 					return "", errors.New("error")
 				},
@@ -112,7 +122,7 @@ func TestService_Register(t *testing.T) {
 					return 0, domain.ErrUserAlreadyExists
 				},
 			},
-			h: &MockPWHasher{
+			p: &MockPWManager{
 				HashFunc: func(ctx context.Context, plainPassword string) (string, error) {
 					return "aFakePasswordHash", nil
 				},
@@ -139,7 +149,7 @@ func TestService_Register(t *testing.T) {
 					return 1, nil
 				},
 			},
-			h: &MockPWHasher{
+			p: &MockPWManager{
 				HashFunc: func(ctx context.Context, plainPassword string) (string, error) {
 					return "aFakePasswordHash", nil
 				},
@@ -156,8 +166,132 @@ func TestService_Register(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := service.New(tt.r, tt.h, tt.t)
+			s := service.New(tt.r, tt.p, tt.t)
 			got, err := s.Register(t.Context(), tt.u, tt.plainPassword)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if got != tt.want {
+				t.Errorf("got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestService_Login(t *testing.T) {
+	tests := []struct {
+		name          string
+		u             domain.User
+		plainPassword string
+		r             service.UserRepository
+		p             service.PasswordManager
+		t             service.TokenGenerator
+		want          string
+		wantErr       bool
+	}{
+		{
+			name: "successful login",
+			u: domain.User{
+				Email: "valid.email@gmail.com",
+			},
+			plainPassword: "12345678",
+			r: &MockRepo{
+				GetIDAndHashByEmailFunc: func(ctx context.Context, email string) (int64, string, error) {
+					return 1, "aValidHash", nil
+				},
+			},
+			p: &MockPWManager{
+				VerifyFunc: func(encoded, providedPassword string) (bool, error) {
+					return true, nil
+				},
+			},
+			t: &MockTKGenerator{
+				GenerateFunc: func(ctx context.Context, userID int64) (string, error) {
+					return "aTokenToBeReturned", nil
+				},
+			},
+			want:    "aTokenToBeReturned",
+			wantErr: false,
+		},
+		{
+			name: "invalid password",
+			u: domain.User{
+				Email: "valid.email@gmail.com",
+			},
+			plainPassword: "invalidPassword",
+			r: &MockRepo{
+				GetIDAndHashByEmailFunc: func(ctx context.Context, email string) (int64, string, error) {
+					return 1, "aValidHash", nil
+				},
+			},
+			p: &MockPWManager{
+				VerifyFunc: func(encoded, providedPassword string) (bool, error) {
+					return false, nil
+				},
+			},
+			t: &MockTKGenerator{
+				GenerateFunc: func(ctx context.Context, userID int64) (string, error) {
+					return "aValidToken", nil
+				},
+			},
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name: "user does not exist",
+			u: domain.User{
+				Email: "valid.email@gmail.com",
+			},
+			plainPassword: "invalidPassword",
+			r: &MockRepo{
+				GetIDAndHashByEmailFunc: func(ctx context.Context, email string) (int64, string, error) {
+					return 0, "", domain.ErrUserDoesNotExist
+				},
+			},
+			p: &MockPWManager{
+				VerifyFunc: func(encoded, providedPassword string) (bool, error) {
+					return true, nil
+				},
+			},
+			t: &MockTKGenerator{
+				GenerateFunc: func(ctx context.Context, userID int64) (string, error) {
+					return "aValidToken", nil
+				},
+			},
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name: "token generation error",
+			u: domain.User{
+				Email: "valid.email@gmail.com",
+			},
+			plainPassword: "12345678",
+			r: &MockRepo{
+				GetIDAndHashByEmailFunc: func(ctx context.Context, email string) (int64, string, error) {
+					return 1, "aValidHash", nil
+				},
+			},
+			p: &MockPWManager{
+				VerifyFunc: func(encoded, providedPassword string) (bool, error) {
+					return true, nil
+				},
+			},
+			t: &MockTKGenerator{
+				GenerateFunc: func(ctx context.Context, userID int64) (string, error) {
+					return "", errors.New("error")
+				},
+			},
+			want:    "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := service.New(tt.r, tt.p, tt.t)
+			got, err := s.Login(t.Context(), tt.u, tt.plainPassword)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("error = %v, wantErr %v", err, tt.wantErr)
 			}

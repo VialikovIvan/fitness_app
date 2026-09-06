@@ -12,6 +12,7 @@ func SetupRouter(h *health.Handler, u *user.Handler) http.Handler {
 
 	mux.HandleFunc("GET /health", h.HandleHealth)
 	mux.HandleFunc("POST /register", u.Register)
+	mux.HandleFunc("POST /login", u.Login)
 
 	return mux
 }
