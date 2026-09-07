@@ -53,6 +53,10 @@ type tokenResponse struct {
 	Token string `json:"token"`
 }
 
+type logoutResponse struct {
+	Message string `json:"message"`
+}
+
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	logger := h.logger
 
@@ -190,6 +194,46 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Info("user logged in successfully")
+}
+
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	logger := h.logger
+
+	rawTraceID := r.Context().Value("traceID")
+	if rawTraceID != nil {
+		if traceID, ok := rawTraceID.(string); ok {
+			logger = h.logger.With("traceID", traceID)
+		}
+	}
+
+	logger.Info("logout request received")
+
+	cookie := http.Cookie{
+		Name:     "authToken",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   -1,
+	}
+
+	http.SetCookie(w, &cookie)
+
+	resp := logoutResponse{
+		Message: "logged out successfully",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	err := json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		logger.Error("failed to encode response", "err", err)
+		return
+	}
+
+	logger.Info("user logged out successfully")
 }
 
 func handleServiceError(w http.ResponseWriter, err error, logger *slog.Logger) {

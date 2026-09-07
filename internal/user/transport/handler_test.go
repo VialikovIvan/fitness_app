@@ -216,3 +216,42 @@ func TestHandler_Login(t *testing.T) {
 		})
 	}
 }
+
+func TestHandler_Logout(t *testing.T) {
+	tests := []struct {
+		name        string
+		wantJSON    string
+		wantCookies int
+		wantStatus  int
+	}{
+		{
+			name:        "successfully invalidates cookie",
+			wantJSON:    `{"message":"logged out successfully"}`,
+			wantCookies: 1,
+			wantStatus:  http.StatusOK,
+		},
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := transport.New(&MockService{}, validator.New(), logger)
+
+			req := httptest.NewRequest("POST", "/logout", http.NoBody)
+			rr := httptest.NewRecorder()
+
+			h.Logout(rr, req)
+
+			if rr.Code != tt.wantStatus {
+				t.Errorf("status code: got = %v, want %v", rr.Code, tt.wantStatus)
+			}
+
+			if len(rr.Result().Cookies()) != tt.wantCookies {
+				t.Errorf("cookies: got = %v, want %v", len(rr.Result().Cookies()), tt.wantCookies)
+			}
+
+			assert.JSONEq(t, tt.wantJSON, rr.Body.String())
+		})
+	}
+}
