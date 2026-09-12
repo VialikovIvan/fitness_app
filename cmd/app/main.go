@@ -13,6 +13,7 @@ import (
 	"github.com/VialikovIvan/fitness_app/internal/infrastructure/config"
 	myhttp "github.com/VialikovIvan/fitness_app/internal/infrastructure/http"
 	"github.com/VialikovIvan/fitness_app/internal/infrastructure/postgres"
+	myredis "github.com/VialikovIvan/fitness_app/internal/infrastructure/redis"
 	"github.com/joho/godotenv"
 
 	"github.com/VialikovIvan/fitness_app/internal/health"
@@ -47,6 +48,15 @@ func main() {
 	logger.Info("database connection established")
 
 	defer postgres.CloseDB(db)
+
+	rdb, err := myredis.InitRedis(cfg.RedisURL)
+	if err != nil {
+		logger.Error("redis connection error", slog.Any("err", err))
+		os.Exit(1)
+	}
+	logger.Info("redis connection established")
+
+	defer myredis.CloseRedis(rdb)
 
 	healthHandler := health.New()
 	userHandler := user.New(db, cfg.JWTSecret, logger)
