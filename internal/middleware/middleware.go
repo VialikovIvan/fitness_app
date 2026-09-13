@@ -10,17 +10,23 @@ type Limiter interface {
 	AllowRequestByIP(ctx context.Context, ip string) (bool, error)
 }
 
-type Manager struct {
-	logger    *slog.Logger
-	limiter   Limiter
-	muMap     map[string]*sync.Mutex
-	muMapLock sync.Mutex
+type TokenValidator interface {
+	Validate(ctx context.Context, tokenStr string) (int64, error)
 }
 
-func New(l *slog.Logger, lim Limiter) *Manager {
+type Manager struct {
+	logger         *slog.Logger
+	limiter        Limiter
+	tokenValidator TokenValidator
+	muMap          map[string]*sync.Mutex
+	muMapLock      sync.Mutex
+}
+
+func New(l *slog.Logger, lim Limiter, t TokenValidator) *Manager {
 	return &Manager{
-		logger:  l,
-		limiter: lim,
-		muMap: make(map[string]*sync.Mutex),
+		logger:         l,
+		limiter:        lim,
+		tokenValidator: t,
+		muMap:          make(map[string]*sync.Mutex),
 	}
 }

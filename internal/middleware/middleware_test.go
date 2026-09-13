@@ -22,6 +22,14 @@ func (m *MockLimiter) AllowRequestByIP(ctx context.Context, ip string) (bool, er
 	return m.AllowRequestByIPFunc(ctx, ip)
 }
 
+type MockTokenValidator struct {
+	ValidateFunc func(ctx context.Context, tokenStr string) (int64, error)
+}
+
+func (m *MockTokenValidator) Validate(ctx context.Context, tokenStr string) (int64, error) {
+	return m.ValidateFunc(ctx, tokenStr)
+}
+
 func TestManager_Recovery(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -48,7 +56,7 @@ func TestManager_Recovery(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := middleware.New(logger, &MockLimiter{})
+			m := middleware.New(logger, &MockLimiter{}, &MockTokenValidator{})
 
 			handler := m.Recovery(tt.handler)
 
@@ -66,7 +74,7 @@ func TestManager_Recovery(t *testing.T) {
 
 func TestManager_EnrichContext(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	m := middleware.New(logger, &MockLimiter{})
+	m := middleware.New(logger, &MockLimiter{}, &MockTokenValidator{})
 
 	handler := m.EnrichContext(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rawTraceID := r.Context().Value("traceID")
@@ -98,7 +106,7 @@ func TestManager_EnrichContext(t *testing.T) {
 func TestManager_TrackRequest(t *testing.T) {
 	var logBuffer bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logBuffer, nil))
-	m := middleware.New(logger, &MockLimiter{})
+	m := middleware.New(logger, &MockLimiter{}, &MockTokenValidator{})
 
 	handler := m.TrackRequest(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -142,7 +150,7 @@ func TestManager_RateLimit(t *testing.T) {
 					AllowRequestByIPFunc: func(ctx context.Context, ip string) (bool, error) {
 						return true, nil
 					},
-				})
+				}, &MockTokenValidator{})
 			},
 			wantStatus: 200,
 		},
@@ -153,7 +161,7 @@ func TestManager_RateLimit(t *testing.T) {
 					AllowRequestByIPFunc: func(ctx context.Context, ip string) (bool, error) {
 						return false, nil
 					},
-				})
+				}, &MockTokenValidator{})
 			},
 			wantStatus: 429,
 		},
@@ -164,7 +172,7 @@ func TestManager_RateLimit(t *testing.T) {
 					AllowRequestByIPFunc: func(ctx context.Context, ip string) (bool, error) {
 						return true, errors.New("error")
 					},
-				})
+				}, &MockTokenValidator{})
 			},
 			wantStatus: 200,
 		},
@@ -179,6 +187,168 @@ func TestManager_RateLimit(t *testing.T) {
 			}))
 
 			req := httptest.NewRequest("GET", "/test", nil)
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+
+			if rr.Code != tt.wantStatus {
+				t.Errorf("status code: got = %v, want %v", rr.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestManager_AuthOnly(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	tests := []struct {
+		name            string
+		newManager      func() *middleware.Manager
+		cookieSetup     *http.Cookie
+		wantStatus      int
+		wantIDInContext int64
+	}{
+		{
+			name: "authorized",
+			newManager: func() *middleware.Manager {
+				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
+						return 1, nil
+					},
+				})
+			},
+			cookieSetup: &http.Cookie{
+				Name:  "authToken",
+				Value: "aTestToken",
+			},
+			wantStatus:      200,
+			wantIDInContext: 1,
+		},
+		{
+			name: "no cookie",
+			newManager: func() *middleware.Manager {
+				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
+						return 0, nil
+					},
+				})
+			},
+			wantStatus: 401,
+		},
+		{
+			name: "validation error",
+			newManager: func() *middleware.Manager {
+				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
+						return 0, errors.New("error")
+					},
+				})
+			},
+			cookieSetup: &http.Cookie{
+				Name:  "authToken",
+				Value: "aTestToken",
+			},
+			wantStatus: 401,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := tt.newManager()
+
+			var gotID int64
+
+			handler := m.AuthOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if raw := r.Context().Value("userID"); raw != nil {
+					gotID = raw.(int64)
+				}
+
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			if tt.cookieSetup != nil {
+				req.AddCookie(tt.cookieSetup)
+			}
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+
+			if tt.wantIDInContext != 0 && gotID != tt.wantIDInContext {
+				t.Errorf("ID in context: got = %v, want %v", gotID, tt.wantIDInContext)
+			}
+
+			if rr.Code != tt.wantStatus {
+				t.Errorf("status code: got = %v, want %v", rr.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestManager_GuestOnly(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	tests := []struct {
+		name        string
+		newManager  func() *middleware.Manager
+		cookieSetup *http.Cookie
+		wantStatus  int
+	}{
+		{
+			name: "guest allowed (no cookie)",
+			newManager: func() *middleware.Manager {
+				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
+						return 1, nil
+					},
+				})
+			},
+			wantStatus: 200,
+		},
+		{
+			name: "guest allowed (invalid token)",
+			newManager: func() *middleware.Manager {
+				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
+						return 0, errors.New("error")
+					},
+				})
+			},
+			cookieSetup: &http.Cookie{
+				Name:  "authToken",
+				Value: "aTestToken",
+			},
+			wantStatus: 200,
+		},
+		{
+			name: "blocked (valid token)",
+			newManager: func() *middleware.Manager {
+				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
+						return 1, nil
+					},
+				})
+			},
+			cookieSetup: &http.Cookie{
+				Name:  "authToken",
+				Value: "aTestToken",
+			},
+			wantStatus: 403,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := tt.newManager()
+
+			handler := m.GuestOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			if tt.cookieSetup != nil {
+				req.AddCookie(tt.cookieSetup)
+			}
 			rr := httptest.NewRecorder()
 
 			handler.ServeHTTP(rr, req)
