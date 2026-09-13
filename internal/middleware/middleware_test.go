@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/VialikovIvan/fitness_app/internal/infrastructure/middleware"
+	"github.com/VialikovIvan/fitness_app/internal/middleware"
 )
 
 type MockLimiter struct {
