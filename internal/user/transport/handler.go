@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/VialikovIvan/fitness_app/internal/middleware"
 	"github.com/VialikovIvan/fitness_app/internal/user/domain"
 )
 
@@ -60,11 +61,8 @@ type logoutResponse struct {
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	logger := h.logger
 
-	rawTraceID := r.Context().Value("traceID")
-	if rawTraceID != nil {
-		if traceID, ok := rawTraceID.(string); ok {
-			logger = h.logger.With("traceID", traceID)
-		}
+	if traceID, ok := middleware.GetTraceID(r); ok {
+		logger = h.logger.With("traceID", traceID)
 	}
 
 	logger.Info("register request received")
@@ -131,11 +129,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	logger := h.logger
 
-	rawTraceID := r.Context().Value("traceID")
-	if rawTraceID != nil {
-		if traceID, ok := rawTraceID.(string); ok {
-			logger = h.logger.With("traceID", traceID)
-		}
+	if traceID, ok := middleware.GetTraceID(r); ok {
+		logger = h.logger.With("traceID", traceID)
 	}
 
 	logger.Info("login request received")
@@ -199,11 +194,8 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	logger := h.logger
 
-	rawTraceID := r.Context().Value("traceID")
-	if rawTraceID != nil {
-		if traceID, ok := rawTraceID.(string); ok {
-			logger = h.logger.With("traceID", traceID)
-		}
+	if traceID, ok := middleware.GetTraceID(r); ok {
+		logger = h.logger.With("traceID", traceID)
 	}
 
 	logger.Info("logout request received")
@@ -263,3 +255,5 @@ func handleServiceError(w http.ResponseWriter, err error, logger *slog.Logger) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }
+
+// Only commit in main branch
