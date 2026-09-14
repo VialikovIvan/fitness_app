@@ -65,8 +65,6 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		logger = h.logger.With("traceID", traceID)
 	}
 
-	logger.Info("register request received")
-
 	var req registerRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -122,8 +120,6 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		logger.Error("failed to encode response", "err", err)
 		return
 	}
-
-	logger.Info("user registered successfully")
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
@@ -132,8 +128,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if traceID, ok := middleware.GetTraceID(r); ok {
 		logger = h.logger.With("traceID", traceID)
 	}
-
-	logger.Info("login request received")
 
 	var req loginRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -187,8 +181,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		logger.Error("failed to encode response", "err", err)
 		return
 	}
-
-	logger.Info("user logged in successfully")
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
@@ -197,8 +189,6 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	if traceID, ok := middleware.GetTraceID(r); ok {
 		logger = h.logger.With("traceID", traceID)
 	}
-
-	logger.Info("logout request received")
 
 	cookie := http.Cookie{
 		Name:     "authToken",
@@ -224,8 +214,6 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		logger.Error("failed to encode response", "err", err)
 		return
 	}
-
-	logger.Info("user logged out successfully")
 }
 
 func handleServiceError(w http.ResponseWriter, err error, logger *slog.Logger) {
@@ -255,5 +243,3 @@ func handleServiceError(w http.ResponseWriter, err error, logger *slog.Logger) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }
-
-// Only commit in main branch
