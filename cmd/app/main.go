@@ -12,8 +12,10 @@ import (
 
 	"github.com/VialikovIvan/fitness_app/internal/infrastructure/config"
 	myhttp "github.com/VialikovIvan/fitness_app/internal/infrastructure/http"
+	"github.com/VialikovIvan/fitness_app/internal/infrastructure/jwt"
 	"github.com/VialikovIvan/fitness_app/internal/infrastructure/postgres"
 	myredis "github.com/VialikovIvan/fitness_app/internal/infrastructure/redis"
+	"github.com/VialikovIvan/fitness_app/internal/middleware"
 	"github.com/joho/godotenv"
 
 	"github.com/VialikovIvan/fitness_app/internal/health"
@@ -58,17 +60,22 @@ func main() {
 
 	defer myredis.CloseRedis(rdb)
 
+	limiter := myredis.NewLimiter(rdb)
+	tokenValidator := jwt.New(cfg.JWTSecret)
+
+	manager := middleware.New(logger, limiter, tokenValidator)
+
 	healthHandler := health.New()
 	userHandler := user.New(db, cfg.JWTSecret, logger)
 
-	router := myhttp.SetupRouter(healthHandler, userHandler)
-	server := myhttp.NewServer(cfg.Port, router)
+	router := myhttp.NewRouter(manager, healthHandler, userHandler)
+	server := myhttp.NewServer(cfg.Port, router.Setup())
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	go func() {
-		logger.Info("server starting", "addr", server.Addr)
+		logger.Info("server started", "addr", server.Addr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("server error", slog.Any("err", err))
 			os.Exit(1)
