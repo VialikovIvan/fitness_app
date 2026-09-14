@@ -12,10 +12,10 @@ import (
 
 	"github.com/VialikovIvan/fitness_app/internal/infrastructure/config"
 	myhttp "github.com/VialikovIvan/fitness_app/internal/infrastructure/http"
-	"github.com/VialikovIvan/fitness_app/internal/infrastructure/jwt"
 	"github.com/VialikovIvan/fitness_app/internal/infrastructure/postgres"
 	myredis "github.com/VialikovIvan/fitness_app/internal/infrastructure/redis"
 	"github.com/VialikovIvan/fitness_app/internal/middleware"
+	"github.com/VialikovIvan/fitness_app/internal/pkg/jwt"
 	"github.com/joho/godotenv"
 
 	"github.com/VialikovIvan/fitness_app/internal/health"

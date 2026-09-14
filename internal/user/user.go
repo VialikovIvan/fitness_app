@@ -3,9 +3,9 @@ package user
 import (
 	"log/slog"
 
-	myjwt "github.com/VialikovIvan/fitness_app/internal/infrastructure/jwt"
-	"github.com/VialikovIvan/fitness_app/internal/user/infrastructure/crypto"
-	"github.com/VialikovIvan/fitness_app/internal/user/infrastructure/repository"
+	"github.com/VialikovIvan/fitness_app/internal/pkg/crypto"
+	myjwt "github.com/VialikovIvan/fitness_app/internal/pkg/jwt"
+	"github.com/VialikovIvan/fitness_app/internal/user/repository"
 	"github.com/VialikovIvan/fitness_app/internal/user/service"
 	"github.com/VialikovIvan/fitness_app/internal/user/transport"
 	"github.com/go-playground/validator/v10"

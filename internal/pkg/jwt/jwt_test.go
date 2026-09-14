@@ -3,7 +3,7 @@ package jwt_test
 import (
 	"testing"
 
-	myjwt "github.com/VialikovIvan/fitness_app/internal/infrastructure/jwt"
+	myjwt "github.com/VialikovIvan/fitness_app/internal/pkg/jwt"
 )
 
 func TestJWTManager(t *testing.T) {

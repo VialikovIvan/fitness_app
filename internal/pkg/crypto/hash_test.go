@@ -3,7 +3,7 @@ package crypto_test
 import (
 	"testing"
 
-	"github.com/VialikovIvan/fitness_app/internal/user/infrastructure/crypto"
+	"github.com/VialikovIvan/fitness_app/internal/pkg/crypto"
 )
 
 func TestArgon2Manager(t *testing.T) {
