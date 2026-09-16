@@ -11,7 +11,7 @@ type Limiter interface {
 }
 
 type TokenValidator interface {
-	Validate(ctx context.Context, tokenStr string) (int64, error)
+	Validate(ctx context.Context, tokenStr string) (int64, string, error)
 }
 
 type Manager struct {

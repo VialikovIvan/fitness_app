@@ -30,9 +30,10 @@ type postgresUser struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	DeletedAt    time.Time
+	Role         string
 }
 
-func (p *PostgresRepository) Create(ctx context.Context, u domain.User, hash string) (int64, error) {
+func (p *PostgresRepository) Create(ctx context.Context, u domain.User, hash string) (domain.User, error) {
 	user := postgresUser{
 		FirstName:    u.FirstName,
 		MiddleName:   u.MiddleName,
@@ -45,37 +46,43 @@ func (p *PostgresRepository) Create(ctx context.Context, u domain.User, hash str
 	INSERT INTO users (first_name, middle_name, last_name, password_hash, email)
 	VALUES ($1, $2, $3, $4, $5)
 	ON CONFLICT (email) DO NOTHING
-	RETURNING id`,
+	RETURNING id, role`,
 		user.FirstName, user.MiddleName, user.LastName, user.PasswordHash, user.Email,
-	).Scan(&user.ID)
+	).Scan(&user.ID, &user.Role)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, domain.ErrUserAlreadyExists
+			return domain.User{}, domain.ErrUserAlreadyExists
 		}
-		return 0, err
+		return domain.User{}, err
 	}
 
-	return user.ID, nil
+	return domain.User{
+		ID:   user.ID,
+		Role: user.Role,
+	}, nil
 }
 
-func (p *PostgresRepository) GetIDAndHashByEmail(ctx context.Context, email string) (int64, string, error) {
+func (p *PostgresRepository) GetCredentialsByEmail(ctx context.Context, email string) (domain.User, string, error) {
 	user := postgresUser{
 		Email: email,
 	}
 
 	err := p.db.QueryRow(ctx, `
-	SELECT id, password_hash FROM users
+	SELECT id, password_hash, role FROM users
 	WHERE email = $1
 	`, user.Email,
-	).Scan(&user.ID, &user.PasswordHash)
+	).Scan(&user.ID, &user.PasswordHash, &user.Role)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, "", domain.ErrUserDoesNotExist
+			return domain.User{}, "", domain.ErrUserDoesNotExist
 		}
-		return 0, "", err
+		return domain.User{}, "", err
 	}
 
-	return user.ID, user.PasswordHash, nil
+	return domain.User{
+		ID:   user.ID,
+		Role: user.Role,
+	}, user.PasswordHash, nil
 }

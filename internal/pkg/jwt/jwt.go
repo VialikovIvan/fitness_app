@@ -15,7 +15,8 @@ const tokenValidityTime = 24 * time.Hour
 var ErrInvalidToken = errors.New("invalid token")
 
 type Claims struct {
-	ID string
+	ID   string `json:"id"`
+	Role string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -29,9 +30,10 @@ func New(secret string) *Manager {
 	}
 }
 
-func (m *Manager) Generate(ctx context.Context, id int64) (string, error) {
+func (m *Manager) Generate(ctx context.Context, id int64, role string) (string, error) {
 	claims := &Claims{
-		ID: strconv.FormatInt(id, 10),
+		ID:   strconv.FormatInt(id, 10),
+		Role: role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenValidityTime)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -48,7 +50,7 @@ func (m *Manager) Generate(ctx context.Context, id int64) (string, error) {
 	return tokenStr, nil
 }
 
-func (m *Manager) Validate(ctx context.Context, tokenStr string) (int64, error) {
+func (m *Manager) Validate(ctx context.Context, tokenStr string) (int64, string, error) {
 	claims := &Claims{}
 
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (any, error) {
@@ -58,13 +60,13 @@ func (m *Manager) Validate(ctx context.Context, tokenStr string) (int64, error) 
 		return m.secret, nil
 	})
 	if err != nil || !token.Valid {
-		return 0, ErrInvalidToken
+		return 0, "", ErrInvalidToken
 	}
 
 	id, err := strconv.ParseInt(claims.ID, 10, 64)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 
-	return id, nil
+	return id, claims.Role, nil
 }

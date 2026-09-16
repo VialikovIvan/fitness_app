@@ -34,12 +34,13 @@ func TestJWTManager(t *testing.T) {
 	}
 
 	id := int64(12345678)
+	role := "user"
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := myjwt.New(tt.secret)
 
-			tokenStr, _ := m.Generate(t.Context(), id)
+			tokenStr, _ := m.Generate(t.Context(), id, role)
 
 			if tt.secretToFail != "" {
 				m = myjwt.New(tt.secretToFail)
@@ -49,13 +50,17 @@ func TestJWTManager(t *testing.T) {
 				tokenStr = tt.tokenStrToFail
 			}
 
-			gotID, err := m.Validate(t.Context(), tokenStr)
+			gotID, gotRole, err := m.Validate(t.Context(), tokenStr)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("error = %v, wantErr %v", err, tt.wantErr)
 			}
 
 			if !tt.wantErr && gotID != id {
 				t.Errorf("got = %v, want %v", gotID, id)
+			}
+
+			if !tt.wantErr && gotRole != role {
+				t.Errorf("got = %v, want %v", gotRole, role)
 			}
 		})
 	}

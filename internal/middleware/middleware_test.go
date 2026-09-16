@@ -23,10 +23,10 @@ func (m *MockLimiter) AllowRequestByIP(ctx context.Context, ip string) (bool, er
 }
 
 type MockTokenValidator struct {
-	ValidateFunc func(ctx context.Context, tokenStr string) (int64, error)
+	ValidateFunc func(ctx context.Context, tokenStr string) (int64, string, error)
 }
 
-func (m *MockTokenValidator) Validate(ctx context.Context, tokenStr string) (int64, error) {
+func (m *MockTokenValidator) Validate(ctx context.Context, tokenStr string) (int64, string, error) {
 	return m.ValidateFunc(ctx, tokenStr)
 }
 
@@ -212,8 +212,8 @@ func TestManager_AuthOnly(t *testing.T) {
 			name: "authorized",
 			newManager: func() *middleware.Manager {
 				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
-					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
-						return 1, nil
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
+						return 1, "user", nil
 					},
 				})
 			},
@@ -228,8 +228,8 @@ func TestManager_AuthOnly(t *testing.T) {
 			name: "no cookie",
 			newManager: func() *middleware.Manager {
 				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
-					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
-						return 0, nil
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
+						return 0, "", nil
 					},
 				})
 			},
@@ -239,8 +239,8 @@ func TestManager_AuthOnly(t *testing.T) {
 			name: "validation error",
 			newManager: func() *middleware.Manager {
 				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
-					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
-						return 0, errors.New("error")
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
+						return 0, "", errors.New("error")
 					},
 				})
 			},
@@ -298,8 +298,8 @@ func TestManager_GuestOnly(t *testing.T) {
 			name: "guest allowed (no cookie)",
 			newManager: func() *middleware.Manager {
 				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
-					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
-						return 1, nil
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
+						return 1, "user", nil
 					},
 				})
 			},
@@ -309,8 +309,8 @@ func TestManager_GuestOnly(t *testing.T) {
 			name: "guest allowed (invalid token)",
 			newManager: func() *middleware.Manager {
 				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
-					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
-						return 0, errors.New("error")
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
+						return 0, "", errors.New("error")
 					},
 				})
 			},
@@ -324,8 +324,8 @@ func TestManager_GuestOnly(t *testing.T) {
 			name: "blocked (valid token)",
 			newManager: func() *middleware.Manager {
 				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
-					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
-						return 1, nil
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
+						return 1, "user", nil
 					},
 				})
 			},
