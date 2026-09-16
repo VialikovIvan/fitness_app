@@ -359,3 +359,53 @@ func TestManager_GuestOnly(t *testing.T) {
 		})
 	}
 }
+
+func TestManager_RequireAdmin(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	tests := []struct {
+		name       string
+		role       string // Fill in unless want status 500
+		wantStatus int
+	}{
+		{
+			name:       "access allowed",
+			role:       "admin",
+			wantStatus: 200,
+		},
+		{
+			name:       "access denied",
+			role:       "user",
+			wantStatus: 403,
+		},
+		{
+			name:       "no role in context",
+			wantStatus: 500,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := middleware.New(logger, &MockLimiter{}, &MockTokenValidator{})
+
+			handler := m.RequireAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			var req *http.Request
+			if tt.role != "" {
+				req = httptest.NewRequestWithContext(context.WithValue(context.Background(), "role", tt.role),
+					"GET", "/test", nil)
+			} else {
+				req = httptest.NewRequest("GET", "/test", nil)
+			}
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+
+			if rr.Code != tt.wantStatus {
+				t.Errorf("status code: got = %v, want %v", rr.Code, tt.wantStatus)
+			}
+		})
+	}
+}
