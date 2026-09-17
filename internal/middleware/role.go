@@ -19,12 +19,3 @@ func (m *Manager) RequireAdmin(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
-
-func GetRole(r *http.Request) (string, bool) {
-	rawRole := r.Context().Value("role")
-	if rawRole == nil {
-		return "", false
-	}
-	role, ok := rawRole.(string)
-	return role, ok
-}

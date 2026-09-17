@@ -29,3 +29,12 @@ func generateTraceID() string {
 	rand.Read(bytes)
 	return hex.EncodeToString(bytes)
 }
+
+func GetTraceID(r *http.Request) (string, bool) {
+	rawTraceID := r.Context().Value("traceID")
+	if rawTraceID == nil {
+		return "", false
+	}
+	traceID, ok := rawTraceID.(string)
+	return traceID, ok
+}

@@ -45,3 +45,21 @@ func (m *Manager) GuestOnly(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+func GetUserID(r *http.Request) (string, bool) {
+	rawUserID := r.Context().Value("userID")
+	if rawUserID == nil {
+		return "", false
+	}
+	userID, ok := rawUserID.(string)
+	return userID, ok
+}
+
+func GetRole(r *http.Request) (string, bool) {
+	rawRole := r.Context().Value("role")
+	if rawRole == nil {
+		return "", false
+	}
+	role, ok := rawRole.(string)
+	return role, ok
+}

@@ -58,12 +58,3 @@ func (m *Manager) TrackRequest(next http.Handler) http.Handler {
 		)
 	})
 }
-
-func GetTraceID(r *http.Request) (string, bool) {
-	rawTraceID := r.Context().Value("traceID")
-	if rawTraceID == nil {
-		return "", false
-	}
-	traceID, ok := rawTraceID.(string)
-	return traceID, ok
-}
