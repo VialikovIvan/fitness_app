@@ -29,7 +29,7 @@ type postgresUser struct {
 	Email        string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
-	DeletedAt    time.Time
+	DeletedAt    *time.Time
 	Role         string
 }
 
