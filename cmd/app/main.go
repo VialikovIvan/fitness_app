@@ -14,6 +14,7 @@ import (
 	myhttp "github.com/VialikovIvan/fitness_app/internal/infrastructure/http"
 	"github.com/VialikovIvan/fitness_app/internal/infrastructure/postgres"
 	myredis "github.com/VialikovIvan/fitness_app/internal/infrastructure/redis"
+	"github.com/VialikovIvan/fitness_app/internal/membership"
 	"github.com/VialikovIvan/fitness_app/internal/middleware"
 	"github.com/VialikovIvan/fitness_app/internal/pkg/jwt"
 	"github.com/joho/godotenv"
@@ -66,9 +67,10 @@ func main() {
 	manager := middleware.New(logger, limiter, tokenValidator)
 
 	healthHandler := health.New()
+	membershipHandler := membership.New(db, logger)
 	userHandler := user.New(db, cfg.JWTSecret, logger)
 
-	router := myhttp.NewRouter(manager, healthHandler, userHandler)
+	router := myhttp.NewRouter(manager, healthHandler, membershipHandler, userHandler)
 	server := myhttp.NewServer(cfg.Port, router.Setup())
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
