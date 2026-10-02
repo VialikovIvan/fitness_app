@@ -21,16 +21,17 @@ func NewPostgres(db *pgxpool.Pool) *PostgresRepository {
 }
 
 type postgresUser struct {
-	ID           int64
-	FirstName    string
-	MiddleName   string
-	LastName     string
-	PasswordHash string
-	Email        string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	DeletedAt    *time.Time
-	Role         string
+	ID               int64
+	FirstName        string
+	MiddleName       string
+	LastName         string
+	PasswordHash     string
+	Email            string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	DeletedAt        *time.Time
+	Role             string
+	StripeCustomerID *string
 }
 
 func (p *PostgresRepository) Create(ctx context.Context, u domain.User, hash string) (domain.User, error) {
@@ -86,3 +87,23 @@ func (p *PostgresRepository) GetCredentialsByEmail(ctx context.Context, email st
 		Role: user.Role,
 	}, user.PasswordHash, nil
 }
+
+func (p *PostgresRepository) GetStripeCustomerIDByID(ctx context.Context, userID int64) (string, error) {
+	user := postgresUser{
+		ID: userID,
+	}
+
+	err := p.db.QueryRow(ctx, `
+	SELECT stripe_customer_id FROM users
+	WHERE id = $1
+	`, user.ID).Scan(&user.StripeCustomerID)
+	if err != nil {
+		return "", err
+	}
+
+	if user.StripeCustomerID == nil {
+		return "", nil
+	}
+	
+	return *user.StripeCustomerID, nil
+} 
