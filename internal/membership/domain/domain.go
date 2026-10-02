@@ -26,5 +26,5 @@ func IsValidPrice(price decimal.Decimal) bool {
 }
 
 func IsValidCurrency(currency string) bool {
-	return len(currency) == 3
+	return currency == "USD" || currency == "EUR"
 }
