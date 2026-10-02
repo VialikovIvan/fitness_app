@@ -1,0 +1,1 @@
+DROP INDEX subscriptions.idx_one_active_subscription;
