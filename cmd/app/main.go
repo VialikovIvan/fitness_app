@@ -61,16 +61,16 @@ func main() {
 
 	defer myredis.CloseRedis(rdb)
 
-	limiter := myredis.NewLimiter(rdb)
+	cacher := myredis.NewCacher(rdb)
 	tokenValidator := jwt.New(cfg.JWTSecret)
 
-	manager := middleware.New(logger, limiter, tokenValidator)
+	mwManager := middleware.New(logger, cacher, tokenValidator)
 
 	healthHandler := health.New()
 	membershipHandler := membership.New(db, logger)
 	userHandler := user.New(db, cfg.JWTSecret, logger)
 
-	router := myhttp.NewRouter(manager, healthHandler, membershipHandler, userHandler)
+	router := myhttp.NewRouter(mwManager, healthHandler, membershipHandler, userHandler)
 	server := myhttp.NewServer(cfg.Port, router.Setup())
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

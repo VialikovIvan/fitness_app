@@ -9,20 +9,10 @@ import (
 )
 
 const (
-	TokenBucketCapacity            float64 = 100
-	TokenBucketRefillRatePerSecond float64 = 10
-	TokenBucketTTL                         = time.Second * 20
+	tokenBucketCapacity            float64 = 100
+	tokenBucketRefillRatePerSecond float64 = 10
+	tokenBucketTTL                         = time.Second * 20
 )
-
-type RedisLimiter struct {
-	rdb *redis.Client
-}
-
-func NewLimiter(rdb *redis.Client) *RedisLimiter {
-	return &RedisLimiter{
-		rdb: rdb,
-	}
-}
 
 type TokenBucket struct {
 	Tokens     float64
@@ -31,12 +21,12 @@ type TokenBucket struct {
 
 func newTokenBucket() *TokenBucket {
 	return &TokenBucket{
-		Tokens:     TokenBucketCapacity,
+		Tokens:     tokenBucketCapacity,
 		LastRefill: time.Now(),
 	}
 }
 
-func (r *RedisLimiter) AllowRequestByIP(ctx context.Context, ip string) (bool, error) {
+func (r *RedisCacher) AllowRequestByIP(ctx context.Context, ip string) (bool, error) {
 	tb, err := r.getTokenBucketByIP(ctx, ip)
 	if err != nil {
 		return true, err
@@ -57,7 +47,7 @@ func (r *RedisLimiter) AllowRequestByIP(ctx context.Context, ip string) (bool, e
 	return true, nil
 }
 
-func (r *RedisLimiter) getTokenBucketByIP(ctx context.Context, ip string) (*TokenBucket, error) {
+func (r *RedisCacher) getTokenBucketByIP(ctx context.Context, ip string) (*TokenBucket, error) {
 	key := "ratelimit:" + ip
 
 	val, err := r.rdb.Get(ctx, key).Result()
@@ -70,7 +60,7 @@ func (r *RedisLimiter) getTokenBucketByIP(ctx context.Context, ip string) (*Toke
 				return nil, err
 			}
 
-			err = r.rdb.Set(ctx, key, serialized, TokenBucketTTL).Err()
+			err = r.rdb.Set(ctx, key, serialized, tokenBucketTTL).Err()
 
 			return tb, err
 		}
@@ -80,9 +70,9 @@ func (r *RedisLimiter) getTokenBucketByIP(ctx context.Context, ip string) (*Toke
 	return deserialize[*TokenBucket](val)
 }
 
-func (r *RedisLimiter) tryConsume(tb *TokenBucket) bool {
+func (r *RedisCacher) tryConsume(tb *TokenBucket) bool {
 	elapsedSeconds := time.Since(tb.LastRefill).Seconds()
-	tb.Tokens = min(tb.Tokens+elapsedSeconds*TokenBucketRefillRatePerSecond, TokenBucketCapacity)
+	tb.Tokens = min(tb.Tokens+elapsedSeconds*tokenBucketRefillRatePerSecond, tokenBucketCapacity)
 	tb.LastRefill = time.Now()
 
 	if tb.Tokens >= 1 {
@@ -93,7 +83,7 @@ func (r *RedisLimiter) tryConsume(tb *TokenBucket) bool {
 	return false
 }
 
-func (r *RedisLimiter) setTokenBucketByIP(ctx context.Context, ip string, tb *TokenBucket) error {
+func (r *RedisCacher) setTokenBucketByIP(ctx context.Context, ip string, tb *TokenBucket) error {
 	key := "ratelimit:" + ip
 
 	serialized, err := serialize(tb)
@@ -101,7 +91,7 @@ func (r *RedisLimiter) setTokenBucketByIP(ctx context.Context, ip string, tb *To
 		return err
 	}
 
-	err = r.rdb.Set(ctx, key, serialized, TokenBucketTTL).Err()
+	err = r.rdb.Set(ctx, key, serialized, tokenBucketTTL).Err()
 
 	return err
 }

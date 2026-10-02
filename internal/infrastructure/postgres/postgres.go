@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const PostgresPingTimeout = time.Second*5
+const postgresPingTimeout = time.Second*5
 
 func InitDB(connString string) (*pgxpool.Pool, error) {
 	config, err := pgxpool.ParseConfig(connString)
@@ -28,7 +28,7 @@ func InitDB(connString string) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), PostgresPingTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresPingTimeout)
 	defer cancel()
 
 	if err := db.Ping(ctx); err != nil {
