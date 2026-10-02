@@ -46,12 +46,12 @@ func (m *Manager) GuestOnly(next http.Handler) http.Handler {
 	})
 }
 
-func GetUserID(r *http.Request) (string, bool) {
+func GetUserID(r *http.Request) (int64, bool) {
 	rawUserID := r.Context().Value("userID")
 	if rawUserID == nil {
-		return "", false
+		return 0, false
 	}
-	userID, ok := rawUserID.(string)
+	userID, ok := rawUserID.(int64)
 	return userID, ok
 }
 
