@@ -3,17 +3,22 @@ package membership
 import (
 	"log/slog"
 
-	"github.com/VialikovIvan/fitness_app/internal/membership/repository"
+	myredis "github.com/VialikovIvan/fitness_app/internal/infrastructure/redis"
+	mystripe "github.com/VialikovIvan/fitness_app/internal/infrastructure/stripe"
+	membershipRepo "github.com/VialikovIvan/fitness_app/internal/membership/repository"
 	"github.com/VialikovIvan/fitness_app/internal/membership/service"
 	"github.com/VialikovIvan/fitness_app/internal/membership/transport"
+	userRepo "github.com/VialikovIvan/fitness_app/internal/user/repository"
 	"github.com/go-playground/validator/v10"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 )
 
-func New(db *pgxpool.Pool, l *slog.Logger) *transport.Handler {
+func New(db *pgxpool.Pool, rdb *redis.Client, strp *mystripe.StripeManager, c *myredis.RedisCacher, l *slog.Logger) *transport.Handler {
 	l = l.With("feature", "membership")
-	repo := repository.NewPostgres(db)
-	svc := service.New(repo)
+	mr := membershipRepo.NewPostgres(db)
+	ur := userRepo.NewPostgres(db)
+	svc := service.New(mr, mr, mr, ur, c, strp, l)
 	v := validator.New()
 	handler := transport.New(svc, v, l)
 

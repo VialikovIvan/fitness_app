@@ -36,8 +36,11 @@ func (r *Router) Setup() http.Handler {
 
 	r.authOnly("POST /logout", r.user.Logout)
 	r.authOnly("GET /plans", r.membership.GetPlans)
+	r.authOnly("POST /checkout", r.membership.Checkout)
 
 	r.requireAdmin("POST /plans", r.membership.CreatePlan)
+
+	r.public("POST /webhooks/stripe", r.membership.HandleStripeWebhook)
 
 	// Return globally wrapped
 	return chainMiddlewares(r.mux, r.mw.Recovery, r.mw.EnrichContext, r.mw.TrackRequest, r.mw.RateLimit)
@@ -56,7 +59,7 @@ func (r *Router) public(pattern string, h func(http.ResponseWriter, *http.Reques
 }
 
 func (r *Router) requireAdmin(pattern string, h func(http.ResponseWriter, *http.Request)) {
-    r.mux.Handle(pattern, r.mw.AuthOnly(r.mw.RequireAdmin(http.HandlerFunc(h))))
+	r.mux.Handle(pattern, r.mw.AuthOnly(r.mw.RequireAdmin(http.HandlerFunc(h))))
 }
 
 func chainMiddlewares(handler http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {

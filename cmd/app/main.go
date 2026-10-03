@@ -14,10 +14,12 @@ import (
 	myhttp "github.com/VialikovIvan/fitness_app/internal/infrastructure/http"
 	"github.com/VialikovIvan/fitness_app/internal/infrastructure/postgres"
 	myredis "github.com/VialikovIvan/fitness_app/internal/infrastructure/redis"
+	mystripe "github.com/VialikovIvan/fitness_app/internal/infrastructure/stripe"
 	"github.com/VialikovIvan/fitness_app/internal/membership"
 	"github.com/VialikovIvan/fitness_app/internal/middleware"
 	"github.com/VialikovIvan/fitness_app/internal/pkg/jwt"
 	"github.com/joho/godotenv"
+	"github.com/stripe/stripe-go/v86"
 
 	"github.com/VialikovIvan/fitness_app/internal/health"
 	"github.com/VialikovIvan/fitness_app/internal/user"
@@ -61,13 +63,16 @@ func main() {
 
 	defer myredis.CloseRedis(rdb)
 
+	sc := stripe.NewClient(cfg.StripeSecretKey)
+
 	cacher := myredis.NewCacher(rdb)
 	tokenValidator := jwt.New(cfg.JWTSecret)
+	stripeManager := mystripe.New(sc, cfg.BaseURL, cfg.StripeWebhookSecret)
 
 	mwManager := middleware.New(logger, cacher, tokenValidator)
 
 	healthHandler := health.New()
-	membershipHandler := membership.New(db, logger)
+	membershipHandler := membership.New(db, rdb, stripeManager, cacher, logger)
 	userHandler := user.New(db, cfg.JWTSecret, logger)
 
 	router := myhttp.NewRouter(mwManager, healthHandler, membershipHandler, userHandler)

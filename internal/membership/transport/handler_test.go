@@ -17,7 +17,9 @@ import (
 )
 
 type MockService struct {
-	CreatePlanFunc func(ctx context.Context, p domain.Plan) error
+	CreatePlanFunc            func(ctx context.Context, p domain.Plan) error
+	CreateCheckoutSessionFunc func(ctx context.Context, params domain.Checkout) (string, error)
+	HandleStripeWebhookFunc   func(ctx context.Context, body []byte, sig string) error
 }
 
 func (m *MockService) CreatePlan(ctx context.Context, p domain.Plan) error {
@@ -26,6 +28,14 @@ func (m *MockService) CreatePlan(ctx context.Context, p domain.Plan) error {
 
 func (m *MockService) GetPlans(ctx context.Context) ([]domain.Plan, error) {
 	return nil, nil
+}
+
+func (m *MockService) CreateCheckoutSession(ctx context.Context, params domain.Checkout) (string, error) {
+	return m.CreateCheckoutSessionFunc(ctx, params)
+}
+
+func (m *MockService) HandleStripeWebhook(ctx context.Context, body []byte, sig string) error {
+	return m.HandleStripeWebhookFunc(ctx, body, sig)
 }
 
 func TestHandler_CreatePlan(t *testing.T) {
@@ -56,7 +66,7 @@ func TestHandler_CreatePlan(t *testing.T) {
 					return nil
 				},
 			},
-			wantText: "Invalid JSON payload",
+			wantText:   "Invalid JSON payload",
 			wantStatus: http.StatusBadRequest,
 		},
 		{
@@ -67,7 +77,7 @@ func TestHandler_CreatePlan(t *testing.T) {
 					return nil
 				},
 			},
-			wantText: "Invalid data",
+			wantText:   "Invalid data",
 			wantStatus: http.StatusBadRequest,
 		},
 		{
@@ -78,7 +88,7 @@ func TestHandler_CreatePlan(t *testing.T) {
 					return errors.New("error")
 				},
 			},
-			wantText: "Internal Server Error",
+			wantText:   "Internal Server Error",
 			wantStatus: http.StatusInternalServerError,
 		},
 	}
@@ -101,6 +111,162 @@ func TestHandler_CreatePlan(t *testing.T) {
 			if tt.wantJSON != "" {
 				assert.JSONEq(t, tt.wantJSON, rr.Body.String())
 			} else if tt.wantText != "" {
+				assert.Equal(t, tt.wantText+"\n", rr.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandler_Checkout(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		userID     int64
+		hasUserID  bool
+		s          transport.MembershipService
+		wantJSON   string
+		wantText   string
+		wantStatus int
+	}{
+		{
+			name:      "creates a checkout session",
+			body:      `{"plan_id":5}`,
+			userID:    1,
+			hasUserID: true,
+			s: &MockService{
+				CreateCheckoutSessionFunc: func(ctx context.Context, params domain.Checkout) (string, error) {
+					return "https://checkout.stripe.com/abc", nil
+				},
+			},
+			wantJSON:   `{"redirect_url":"https://checkout.stripe.com/abc"}`,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "missing user id in context",
+			body:       `{"plan_id":5}`,
+			hasUserID:  false,
+			s:          &MockService{},
+			wantText:   "Internal Server Error",
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:       "invalid json payload",
+			body:       `{"plan_id":}`,
+			userID:     1,
+			hasUserID:  true,
+			s:          &MockService{},
+			wantText:   "Invalid JSON payload",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "validation error",
+			body:       `{}`,
+			userID:     1,
+			hasUserID:  true,
+			s:          &MockService{},
+			wantText:   "Invalid data",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:      "service error",
+			body:      `{"plan_id":5}`,
+			userID:    1,
+			hasUserID: true,
+			s: &MockService{
+				CreateCheckoutSessionFunc: func(ctx context.Context, params domain.Checkout) (string, error) {
+					return "", errors.New("error")
+				},
+			},
+			wantText:   "Internal Server Error",
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := transport.New(tt.s, validator.New(), logger)
+
+			req := httptest.NewRequest("POST", "/checkout", strings.NewReader(tt.body))
+			if tt.hasUserID {
+				ctx := context.WithValue(req.Context(), "userID", tt.userID)
+				req = req.WithContext(ctx)
+			}
+			rr := httptest.NewRecorder()
+
+			h.Checkout(rr, req)
+
+			if rr.Code != tt.wantStatus {
+				t.Errorf("status code: got = %v, want %v", rr.Code, tt.wantStatus)
+			}
+
+			if tt.wantJSON != "" {
+				assert.JSONEq(t, tt.wantJSON, rr.Body.String())
+			} else if tt.wantText != "" {
+				assert.Equal(t, tt.wantText+"\n", rr.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandler_HandleStripeWebhook(t *testing.T) {
+	tests := []struct {
+		name       string
+		s          transport.MembershipService
+		wantText   string
+		wantStatus int
+	}{
+		{
+			name: "success",
+			s: &MockService{
+				HandleStripeWebhookFunc: func(ctx context.Context, body []byte, sig string) error {
+					return nil
+				},
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "invalid webhook signature",
+			s: &MockService{
+				HandleStripeWebhookFunc: func(ctx context.Context, body []byte, sig string) error {
+					return domain.ErrInvalidWebhook
+				},
+			},
+			wantText:   domain.ErrInvalidWebhook.Error(),
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "service error",
+			s: &MockService{
+				HandleStripeWebhookFunc: func(ctx context.Context, body []byte, sig string) error {
+					return errors.New("error")
+				},
+			},
+			wantText:   "Internal Server Error",
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	body := `{"id":"evt_1"}`
+	sig := "sig"
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := transport.New(tt.s, validator.New(), logger)
+
+			req := httptest.NewRequest("POST", "/webhooks/stripe", strings.NewReader(body))
+			req.Header.Set("Stripe-Signature", sig)
+			rr := httptest.NewRecorder()
+
+			h.HandleStripeWebhook(rr, req)
+
+			if rr.Code != tt.wantStatus {
+				t.Errorf("status code: got = %v, want %v", rr.Code, tt.wantStatus)
+			}
+
+			if tt.wantText != "" {
 				assert.Equal(t, tt.wantText+"\n", rr.Body.String())
 			}
 		})
