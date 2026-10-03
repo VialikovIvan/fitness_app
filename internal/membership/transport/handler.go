@@ -35,12 +35,12 @@ func New(svc MembershipService, v Validator, l *slog.Logger) *Handler {
 	return &Handler{
 		service:  svc,
 		validate: v,
-		logger:   l,
+		logger:   l.With("layer", "transport"),
 	}
 }
 
 type planResponse struct {
-	ID           string          `json:"id"`
+	ID           int64           `json:"id"`
 	Name         string          `json:"name"`
 	DurationDays int             `json:"duration_days"`
 	Price        decimal.Decimal `json:"price"`
@@ -85,7 +85,7 @@ func (h *Handler) GetPlans(w http.ResponseWriter, r *http.Request) {
 
 	for _, p := range plans {
 		httpPlans = append(httpPlans, planResponse{
-			ID:           strconv.FormatInt(p.ID, 10),
+			ID:           p.ID,
 			Name:         p.Name,
 			DurationDays: p.DurationDays,
 			Price:        p.Price,
