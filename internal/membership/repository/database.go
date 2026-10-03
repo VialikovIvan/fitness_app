@@ -20,14 +20,16 @@ func NewPostgres(db *pgxpool.Pool) *PostgresRepository {
 }
 
 type postgresPlan struct {
-	ID           int64
-	Name         string
-	DurationDays int
-	Price        string
-	Currency     string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	DeletedAt    *time.Time
+	ID              int64
+	Name            string
+	DurationDays    int
+	Price           string
+	Currency        string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	DeletedAt       *time.Time
+	StripeProductID string
+	StripePriceID   string
 }
 
 func (p *PostgresRepository) GetPlans(ctx context.Context) ([]domain.Plan, error) {
@@ -80,16 +82,18 @@ func (p *PostgresRepository) GetPlans(ctx context.Context) ([]domain.Plan, error
 
 func (p *PostgresRepository) CreatePlan(ctx context.Context, pl domain.Plan) error {
 	plan := postgresPlan{
-		Name: pl.Name,
-		DurationDays: pl.DurationDays,
-		Price: pl.Price.String(),
-		Currency: pl.Currency,
+		Name:            pl.Name,
+		DurationDays:    pl.DurationDays,
+		Price:           pl.Price.String(),
+		Currency:        pl.Currency,
+		StripeProductID: pl.StripeProductID,
+		StripePriceID:   pl.StripePriceID,
 	}
 
 	_, err := p.db.Exec(ctx, `
-	INSERT INTO plans (name, duration_days, price, currency)
-	VALUES ($1, $2, $3, $4)
-	`, plan.Name, plan.DurationDays, plan.Price, plan.Currency)
+	INSERT INTO plans (name, duration_days, price, currency, stripe_product_id, stripe_price_id)
+	VALUES ($1, $2, $3, $4, $5, $6)
+	`, plan.Name, plan.DurationDays, plan.Price, plan.Currency, plan.StripeProductID, plan.StripePriceID)
 
 	return err
 }
