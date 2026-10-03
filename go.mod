@@ -11,6 +11,7 @@ require (
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/shopspring/decimal v1.4.0
 	github.com/stretchr/testify v1.12.1
+	github.com/stripe/stripe-go/v86 v86.4.2
 	golang.org/x/crypto v0.52.0
 )
 

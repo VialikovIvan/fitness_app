@@ -5,15 +5,23 @@ import (
 	"os"
 )
 
-var ErrDBURLVariableNotFound = errors.New("expected .env variable not found: DATABASE_URL")
-var ErrJWTSecretVariableNotFound = errors.New("expected .env variable not found: JWT_SECRET")
-var ErrRedisURLVariableNotFound = errors.New("expected .env variable not found: REDIS_URL")
+var (
+	ErrDBURLVariableNotFound               = errors.New("expected .env variable not found: DATABASE_URL")
+	ErrJWTSecretVariableNotFound           = errors.New("expected .env variable not found: JWT_SECRET")
+	ErrStripeSecretKeyVariableNotFound     = errors.New("expected .env variable not found: STRIPE_SECRET_KEY")
+	ErrStripeWebhookSecretVariableNotFound = errors.New("expected .env variable not found: STRIPE_WEBHOOK_SECRET")
+	ErrRedisURLVariableNotFound            = errors.New("expected .env variable not found: REDIS_URL")
+	ErrBaseURLVariableNotFound             = errors.New("expected .env variable not found: BASE_URL")
+)
 
 type Config struct {
-	DBURL     string
-	Port      string
-	JWTSecret string
-	RedisURL  string
+	DBURL               string
+	Port                string
+	JWTSecret           string
+	RedisURL            string
+	StripeSecretKey     string
+	StripeWebhookSecret string
+	BaseURL             string
 }
 
 func NewConfig() (*Config, error) {
@@ -21,6 +29,9 @@ func NewConfig() (*Config, error) {
 	port := os.Getenv("PORT")
 	jwtSecret := os.Getenv("JWT_SECRET")
 	redisURL := os.Getenv("REDIS_URL")
+	stripeSecretKey := os.Getenv("STRIPE_SECRET_KEY")
+	stripeWebhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
+	baseURL := os.Getenv("BASE_URL")
 
 	if port == "" {
 		port = "8080"
@@ -38,10 +49,25 @@ func NewConfig() (*Config, error) {
 		return nil, ErrRedisURLVariableNotFound
 	}
 
+	if stripeSecretKey == "" {
+		return nil, ErrStripeSecretKeyVariableNotFound
+	}
+
+	if stripeWebhookSecret == "" {
+		return nil, ErrStripeWebhookSecretVariableNotFound
+	}
+
+	if baseURL == "" {
+		return nil, ErrBaseURLVariableNotFound
+	}
+
 	return &Config{
-		DBURL:     dbURL,
-		Port:      port,
-		JWTSecret: jwtSecret,
-		RedisURL:  redisURL,
+		DBURL:               dbURL,
+		Port:                port,
+		JWTSecret:           jwtSecret,
+		RedisURL:            redisURL,
+		StripeSecretKey:     stripeSecretKey,
+		StripeWebhookSecret: stripeWebhookSecret,
+		BaseURL:             baseURL,
 	}, nil
 }
