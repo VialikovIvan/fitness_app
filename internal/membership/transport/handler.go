@@ -14,7 +14,10 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-const serviceCallTimeout = 3 * time.Second
+const (
+	defaultServiceCallTimeout     = 3 * time.Second
+	externalAPIServiceCallTimeout = 10 * time.Second
+)
 
 type MembershipService interface {
 	GetPlans(ctx context.Context) ([]domain.Plan, error)
@@ -72,7 +75,7 @@ func (h *Handler) GetPlans(w http.ResponseWriter, r *http.Request) {
 		logger = h.logger.With("userID", userID)
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), serviceCallTimeout)
+	ctx, cancel := context.WithTimeout(r.Context(), defaultServiceCallTimeout)
 	defer cancel()
 
 	plans, err := h.service.GetPlans(ctx)
@@ -139,7 +142,7 @@ func (h *Handler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 		Currency:     req.Currency,
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), serviceCallTimeout)
+	ctx, cancel := context.WithTimeout(r.Context(), externalAPIServiceCallTimeout)
 	defer cancel()
 
 	if err := h.service.CreatePlan(ctx, plan); err != nil {
