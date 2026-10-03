@@ -8,23 +8,29 @@ import (
 	"github.com/VialikovIvan/fitness_app/internal/membership/domain"
 )
 
-type MembershipRepository interface {
+type PlanRepository interface {
 	GetPlans(ctx context.Context) ([]domain.Plan, error)
 	CreatePlan(ctx context.Context, plan domain.Plan) error
 }
 
-type Service struct {
-	membershipRepo MembershipRepository
+type Stripe interface {
+	CreatePlan(ctx context.Context, p domain.Plan) (domain.Plan, error)
 }
 
-func New(r MembershipRepository) *Service {
+type Service struct {
+	planRepo PlanRepository
+	stripe   Stripe
+}
+
+func New(pr PlanRepository, s Stripe) *Service {
 	return &Service{
-		membershipRepo: r,
+		planRepo: pr,
+		stripe:   s,
 	}
 }
 
 func (s *Service) GetPlans(ctx context.Context) ([]domain.Plan, error) {
-	plans, err := s.membershipRepo.GetPlans(ctx)
+	plans, err := s.planRepo.GetPlans(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get plans: %w", err)
 	}
@@ -39,15 +45,21 @@ func (s *Service) CreatePlan(ctx context.Context, p domain.Plan) error {
 		return domain.ErrInvalidPrice
 	}
 
+	p.Currency = strings.ToUpper(p.Currency)
+
 	if !domain.IsValidCurrency(p.Currency) {
 		return domain.ErrInvalidCurrency
 	}
 
-	p.Currency = strings.ToUpper(p.Currency)
-
-	err := s.membershipRepo.CreatePlan(ctx, p)
+	var err error
+	p, err = s.stripe.CreatePlan(ctx, p)
 	if err != nil {
-		return fmt.Errorf("create plan: %w", err)
+		return fmt.Errorf("stripe create plan: %w", err)
+	}
+
+	err = s.planRepo.CreatePlan(ctx, p)
+	if err != nil {
+		return fmt.Errorf("repo create plan: %w", err)
 	}
 
 	return nil
