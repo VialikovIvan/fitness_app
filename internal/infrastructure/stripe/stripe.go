@@ -5,13 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/VialikovIvan/fitness_app/internal/membership/domain"
+	mbspDomain "github.com/VialikovIvan/fitness_app/internal/membership/domain"
+	pmtDomain "github.com/VialikovIvan/fitness_app/internal/payment/domain"
+	"github.com/shopspring/decimal"
 	"github.com/stripe/stripe-go/v86"
 )
 
 const (
+	PaymentProvider     string = "stripe"
 	relativeCancelPath  string = "/plans"
 	relativeSuccessPath string = "/checkout/success"
 )
@@ -35,7 +39,7 @@ func New(sc *stripe.Client, baseURL string, secret string) *StripeManager {
 	}
 }
 
-func (m *StripeManager) CreateCheckoutSession(ctx context.Context, p domain.Checkout) (string, error) {
+func (m *StripeManager) CreateCheckoutSession(ctx context.Context, p mbspDomain.Checkout) (string, error) {
 	params := &stripe.CheckoutSessionCreateParams{
 		CancelURL:             stripe.String(m.baseURL + relativeCancelPath),
 		ClientReferenceID:     stripe.String(strconv.FormatInt(p.UserID, 10)),
@@ -72,10 +76,10 @@ func (m *StripeManager) CreateCheckoutSession(ctx context.Context, p domain.Chec
 	return session.URL, nil
 }
 
-func (m *StripeManager) VerifyWebhook(ctx context.Context, body []byte, sig string) (domain.WebhookEvent, error) {
+func (m *StripeManager) VerifyWebhook(ctx context.Context, body []byte, sig string) (mbspDomain.WebhookEvent, error) {
 	event, err := m.sc.ConstructEvent(body, sig, m.webhookSecret)
 	if err != nil {
-		return domain.WebhookEvent{}, err
+		return mbspDomain.WebhookEvent{}, err
 	}
 
 	switch event.Type {
@@ -83,56 +87,66 @@ func (m *StripeManager) VerifyWebhook(ctx context.Context, body []byte, sig stri
 		var session stripe.CheckoutSession
 
 		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
 		userID, err := strconv.ParseInt(session.ClientReferenceID, 10, 64)
 		if err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
 		planID, err := strconv.ParseInt(session.Metadata["plan_id"], 10, 64)
 		if err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
 		sub, err := m.GetSubscriptionByID(ctx, session.Subscription.ID)
 		if err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
-		return domain.WebhookEvent{
+		return mbspDomain.WebhookEvent{
 			ID:           event.ID,
-			Type:         domain.EventCheckoutCompleted,
+			Type:         mbspDomain.EventCheckoutCompleted,
 			UserID:       userID,
 			PlanID:       planID,
 			CustomerID:   session.Customer.ID,
 			Subscription: sub,
+			Payment: pmtDomain.Payment{
+				UserID:            userID,
+				Provider:          PaymentProvider,
+				ProviderPaymentID: session.ID,
+				Amount:            decimal.NewFromInt(session.AmountTotal).Shift(-2),
+				Currency:          strings.ToUpper(string(session.Currency)),
+				Status:            string(session.PaymentStatus),
+				ProviderCreatedAt: time.Unix(session.Created, 0),
+				PaidAt:            unixToTimePtr(event.Created),
+			},
 		}, nil
 
 	case "customer.subscription.deleted":
 		var subscription stripe.Subscription
 
 		if err := json.Unmarshal(event.Data.Raw, &subscription); err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
 		userID, err := strconv.ParseInt(subscription.Metadata["user_id"], 10, 64)
 		if err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
 		planID, err := strconv.ParseInt(subscription.Metadata["plan_id"], 10, 64)
 		if err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
-		return domain.WebhookEvent{
+		return mbspDomain.WebhookEvent{
 			ID:     event.ID,
-			Type:   domain.EventCustomerSubscriptionDeleted,
+			Type:   mbspDomain.EventCustomerSubscriptionDeleted,
 			UserID: userID,
 			PlanID: planID,
-			Subscription: domain.Subscription{
+			Subscription: mbspDomain.Subscription{
 				StripeID:          subscription.ID,
 				Status:            string(subscription.Status),
 				CancelAtPeriodEnd: subscription.CancelAtPeriodEnd,
@@ -144,88 +158,116 @@ func (m *StripeManager) VerifyWebhook(ctx context.Context, body []byte, sig stri
 		var invoice stripe.Invoice
 
 		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
 		if invoice.BillingReason == "subscription_create" {
-			return domain.WebhookEvent{
+			return mbspDomain.WebhookEvent{
 				ID:   event.ID,
-				Type: domain.EventToSkip,
+				Type: mbspDomain.EventToSkip,
 			}, nil
 		}
 
 		userID, err := strconv.ParseInt(invoice.Parent.SubscriptionDetails.Metadata["user_id"], 10, 64)
 		if err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
 		planID, err := strconv.ParseInt(invoice.Parent.SubscriptionDetails.Metadata["plan_id"], 10, 64)
 		if err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
 		sub, err := m.GetSubscriptionByID(ctx, invoice.Parent.SubscriptionDetails.Subscription.ID)
 		if err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
 		if invoice.Parent.SubscriptionDetails.Subscription == nil || invoice.Parent.SubscriptionDetails.Subscription.ID == "" {
-			return domain.WebhookEvent{}, ErrNilInvoiceSubscription
+			return mbspDomain.WebhookEvent{}, ErrNilInvoiceSubscription
 		}
 
-		return domain.WebhookEvent{
+		return mbspDomain.WebhookEvent{
 			ID:           event.ID,
-			Type:         domain.EventInvoicePaid,
+			Type:         mbspDomain.EventInvoicePaid,
 			UserID:       userID,
 			PlanID:       planID,
 			Subscription: sub,
+			Payment: pmtDomain.Payment{
+				UserID:            userID,
+				Provider:          PaymentProvider,
+				ProviderPaymentID: invoice.ID,
+				Amount:            decimal.NewFromInt(invoice.AmountPaid).Shift(-2),
+				Currency:          strings.ToUpper(string(invoice.Currency)),
+				Status:            string(invoice.Status),
+				ProviderCreatedAt: time.Unix(invoice.Created, 0),
+				PaidAt:            unixToTimePtr(invoice.StatusTransitions.PaidAt),
+			},
 		}, nil
 
 	case "invoice.payment_failed":
 		var invoice stripe.Invoice
 
 		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
 		if invoice.BillingReason == "subscription_create" {
-			return domain.WebhookEvent{
+			return mbspDomain.WebhookEvent{
 				ID:   event.ID,
-				Type: domain.EventToSkip,
+				Type: mbspDomain.EventToSkip,
 			}, nil
 		}
 
 		userID, err := strconv.ParseInt(invoice.Parent.SubscriptionDetails.Metadata["user_id"], 10, 64)
 		if err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
 		planID, err := strconv.ParseInt(invoice.Parent.SubscriptionDetails.Metadata["plan_id"], 10, 64)
 		if err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
 		sub, err := m.GetSubscriptionByID(ctx, invoice.Parent.SubscriptionDetails.Subscription.ID)
 		if err != nil {
-			return domain.WebhookEvent{}, err
+			return mbspDomain.WebhookEvent{}, err
 		}
 
 		if invoice.Parent.SubscriptionDetails.Subscription == nil || invoice.Parent.SubscriptionDetails.Subscription.ID == "" {
-			return domain.WebhookEvent{}, ErrNilInvoiceSubscription
+			return mbspDomain.WebhookEvent{}, ErrNilInvoiceSubscription
 		}
 
-		return domain.WebhookEvent{
+		return mbspDomain.WebhookEvent{
 			ID:           event.ID,
-			Type:         domain.EventInvoicePaymentFailed,
+			Type:         mbspDomain.EventInvoicePaymentFailed,
 			UserID:       userID,
 			PlanID:       planID,
 			Subscription: sub,
+			Payment: pmtDomain.Payment{
+				UserID:            userID,
+				Provider:          PaymentProvider,
+				ProviderPaymentID: invoice.ID,
+				Amount:            decimal.NewFromInt(invoice.AmountPaid).Shift(-2),
+				Currency:          strings.ToUpper(string(invoice.Currency)),
+				Status:            string(invoice.Status),
+				ProviderCreatedAt: time.Unix(invoice.Created, 0),
+				PaidAt:            unixToTimePtr(invoice.StatusTransitions.PaidAt),
+			},
 		}, nil
 
 	default:
-		return domain.WebhookEvent{
+		return mbspDomain.WebhookEvent{
 			ID:   event.ID,
-			Type: domain.EventType(event.Type),
+			Type: mbspDomain.EventType(event.Type),
 		}, nil
 	}
+}
+
+func unixToTimePtr(sec int64) *time.Time {
+	if sec <= 0 {
+		return nil
+	}
+	t := time.Unix(sec, 0)
+	return &t
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	pmtDomain "github.com/VialikovIvan/fitness_app/internal/payment/domain"
 	"github.com/shopspring/decimal"
 )
 
@@ -34,12 +35,13 @@ type Checkout struct {
 }
 
 type WebhookEvent struct {
-	ID         string
-	Type       EventType
-	UserID     int64
-	PlanID     int64
-	CustomerID string
-	Subscription
+	ID           string
+	Type         EventType
+	UserID       int64
+	PlanID       int64
+	CustomerID   string
+	Subscription Subscription
+	Payment      pmtDomain.Payment
 }
 
 type Subscription struct {

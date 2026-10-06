@@ -10,20 +10,21 @@ import (
 	"sync"
 
 	myredis "github.com/VialikovIvan/fitness_app/internal/infrastructure/redis"
-	"github.com/VialikovIvan/fitness_app/internal/membership/domain"
+	mbspDomain "github.com/VialikovIvan/fitness_app/internal/membership/domain"
+	pmtDomain "github.com/VialikovIvan/fitness_app/internal/payment/domain"
 )
 
 type PlanRepository interface {
-	GetPlans(ctx context.Context) ([]domain.Plan, error)
-	CreatePlan(ctx context.Context, plan domain.Plan) error
+	GetPlans(ctx context.Context) ([]mbspDomain.Plan, error)
+	CreatePlan(ctx context.Context, plan mbspDomain.Plan) error
 	GetStripePriceIDByPlanID(ctx context.Context, planID int64) (string, error)
 }
 
 type SubscriptionRepository interface {
-	CreateSubscription(ctx context.Context, event domain.WebhookEvent) error
-	ProlongSubscription(ctx context.Context, event domain.WebhookEvent) error
-	MarkSubscriptionPaymentFailed(ctx context.Context, event domain.WebhookEvent) error
-	CancelSubscription(ctx context.Context, event domain.WebhookEvent) error
+	CreateSubscription(ctx context.Context, event mbspDomain.WebhookEvent) (int64, error)
+	ProlongSubscription(ctx context.Context, event mbspDomain.WebhookEvent) (int64, error)
+	MarkSubscriptionPaymentFailed(ctx context.Context, event mbspDomain.WebhookEvent) (int64, error)
+	CancelSubscription(ctx context.Context, event mbspDomain.WebhookEvent) error
 }
 
 type MembershipRepository interface {
@@ -34,19 +35,23 @@ type UserRepository interface {
 	GetStripeCustomerIDByID(ctx context.Context, userID int64) (string, error)
 }
 
+type PaymentRepository interface {
+	Log(ctx context.Context, pmt pmtDomain.Payment) error
+}
+
 type Cache interface {
 	GetCheckoutURL(ctx context.Context, idx string) (string, error)
 	SetCheckoutURL(ctx context.Context, idx string, url string) error
 	DeleteCheckoutURL(ctx context.Context, idx string) error
 	EventIsProcessed(ctx context.Context, eventID string) (bool, error)
-	MarkEventProcessed(ctx context.Context, eventID string) (error)
+	MarkEventProcessed(ctx context.Context, eventID string) error
 }
 
 type Stripe interface {
-	CreatePlan(ctx context.Context, p domain.Plan) (domain.Plan, error)
-	CreateCheckoutSession(ctx context.Context, p domain.Checkout) (string, error)
-	VerifyWebhook(ctx context.Context, body []byte, sig string) (domain.WebhookEvent, error)
-	GetSubscriptionByID(ctx context.Context, subscriptionID string) (domain.Subscription, error)
+	CreatePlan(ctx context.Context, p mbspDomain.Plan) (mbspDomain.Plan, error)
+	CreateCheckoutSession(ctx context.Context, p mbspDomain.Checkout) (string, error)
+	VerifyWebhook(ctx context.Context, body []byte, sig string) (mbspDomain.WebhookEvent, error)
+	GetSubscriptionByID(ctx context.Context, subscriptionID string) (mbspDomain.Subscription, error)
 }
 
 type Service struct {
@@ -54,6 +59,7 @@ type Service struct {
 	subscriptionRepo SubscriptionRepository
 	membershipRepo   MembershipRepository
 	userRepo         UserRepository
+	paymentRepo      PaymentRepository
 	cache            Cache
 	stripe           Stripe
 	logger           *slog.Logger
@@ -61,12 +67,14 @@ type Service struct {
 	muMapLock        sync.Mutex
 }
 
-func New(pr PlanRepository, sr SubscriptionRepository, mr MembershipRepository, ur UserRepository, c Cache, s Stripe, l *slog.Logger) *Service {
+func New(pr PlanRepository, sr SubscriptionRepository, mr MembershipRepository,
+	ur UserRepository, pmr PaymentRepository, c Cache, s Stripe, l *slog.Logger) *Service {
 	return &Service{
 		planRepo:         pr,
 		subscriptionRepo: sr,
 		membershipRepo:   mr,
 		userRepo:         ur,
+		paymentRepo:      pmr,
 		cache:            c,
 		stripe:           s,
 		logger:           l.With("layer", "service"),
@@ -74,7 +82,7 @@ func New(pr PlanRepository, sr SubscriptionRepository, mr MembershipRepository, 
 	}
 }
 
-func (s *Service) GetPlans(ctx context.Context) ([]domain.Plan, error) {
+func (s *Service) GetPlans(ctx context.Context) ([]mbspDomain.Plan, error) {
 	plans, err := s.planRepo.GetPlans(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get plans: %w", err)
@@ -83,17 +91,17 @@ func (s *Service) GetPlans(ctx context.Context) ([]domain.Plan, error) {
 	return plans, nil
 }
 
-func (s *Service) CreatePlan(ctx context.Context, p domain.Plan) error {
+func (s *Service) CreatePlan(ctx context.Context, p mbspDomain.Plan) error {
 	p.Price = p.Price.Round(2)
 
-	if !domain.IsValidPrice(p.Price) {
-		return domain.ErrInvalidPrice
+	if !mbspDomain.IsValidPrice(p.Price) {
+		return mbspDomain.ErrInvalidPrice
 	}
 
 	p.Currency = strings.ToUpper(p.Currency)
 
-	if !domain.IsValidCurrency(p.Currency) {
-		return domain.ErrInvalidCurrency
+	if !mbspDomain.IsValidCurrency(p.Currency) {
+		return mbspDomain.ErrInvalidCurrency
 	}
 
 	var err error
@@ -110,7 +118,7 @@ func (s *Service) CreatePlan(ctx context.Context, p domain.Plan) error {
 	return nil
 }
 
-func (s *Service) CreateCheckoutSession(ctx context.Context, params domain.Checkout) (string, error) {
+func (s *Service) CreateCheckoutSession(ctx context.Context, params mbspDomain.Checkout) (string, error) {
 	uniqueIdx := checkoutIdx(params.UserID, params.PlanID)
 	mu := s.getMutexByIdx(uniqueIdx)
 
@@ -131,12 +139,12 @@ func (s *Service) CreateCheckoutSession(ctx context.Context, params domain.Check
 		return "", fmt.Errorf("has active membership: %w", err)
 	}
 	if hasActive {
-		return "", domain.ErrUserAlreadyHasActiveMembership
+		return "", mbspDomain.ErrUserAlreadyHasActiveMembership
 	}
 
 	params.StripePriceID, err = s.planRepo.GetStripePriceIDByPlanID(ctx, params.PlanID)
 	if err != nil {
-		if errors.Is(err, domain.ErrPlanDoesNotExist) {
+		if errors.Is(err, mbspDomain.ErrPlanDoesNotExist) {
 			return "", err
 		}
 		return "", fmt.Errorf("get price id: %w", err)
@@ -162,7 +170,7 @@ func (s *Service) CreateCheckoutSession(ctx context.Context, params domain.Check
 func (s *Service) HandleStripeWebhook(ctx context.Context, body []byte, sig string) error {
 	event, err := s.stripe.VerifyWebhook(ctx, body, sig)
 	if err != nil {
-		return domain.ErrInvalidWebhook
+		return mbspDomain.ErrInvalidWebhook
 	}
 
 	isProcessed, err := s.cache.EventIsProcessed(ctx, event.ID)
@@ -177,13 +185,13 @@ func (s *Service) HandleStripeWebhook(ctx context.Context, body []byte, sig stri
 	// TODO: Swap the service call for the publish to RabbitMQ
 	// TODO: Make use of payments table
 	switch event.Type {
-	case domain.EventCheckoutCompleted:
+	case mbspDomain.EventCheckoutCompleted:
 		err = s.HandleEventCheckoutCompleted(ctx, event)
-	case domain.EventCustomerSubscriptionDeleted:
+	case mbspDomain.EventCustomerSubscriptionDeleted:
 		err = s.HandleEventCustomerSubscriptionDeleted(ctx, event)
-	case domain.EventInvoicePaid:
+	case mbspDomain.EventInvoicePaid:
 		err = s.HandleEventInvoicePaid(ctx, event)
-	case domain.EventInvoicePaymentFailed:
+	case mbspDomain.EventInvoicePaymentFailed:
 		err = s.HandleEventInvoicePaymentFailed(ctx, event)
 	default:
 		s.logger.Info("unhandled webhook event", "type", event.Type, "id", event.ID)
@@ -200,9 +208,15 @@ func (s *Service) HandleStripeWebhook(ctx context.Context, body []byte, sig stri
 	return nil
 }
 
-func (s *Service) HandleEventCheckoutCompleted(ctx context.Context, event domain.WebhookEvent) error {
-	if err := s.subscriptionRepo.CreateSubscription(ctx, event); err != nil {
+func (s *Service) HandleEventCheckoutCompleted(ctx context.Context, event mbspDomain.WebhookEvent) error {
+	var err error
+	event.Payment.SubscriptionID, err = s.subscriptionRepo.CreateSubscription(ctx, event)
+	if err != nil {
 		return fmt.Errorf("create subscription: %w", err)
+	}
+
+	if err := s.paymentRepo.Log(ctx, event.Payment); err != nil {
+		s.logger.Error("failed to log the payment", "err", err)
 	}
 
 	if err := s.cache.DeleteCheckoutURL(ctx, checkoutIdx(event.UserID, event.PlanID)); err != nil {
@@ -212,7 +226,7 @@ func (s *Service) HandleEventCheckoutCompleted(ctx context.Context, event domain
 	return nil
 }
 
-func (s *Service) HandleEventCustomerSubscriptionDeleted(ctx context.Context, event domain.WebhookEvent) error {
+func (s *Service) HandleEventCustomerSubscriptionDeleted(ctx context.Context, event mbspDomain.WebhookEvent) error {
 	if err := s.subscriptionRepo.CancelSubscription(ctx, event); err != nil {
 		return fmt.Errorf("cancel subscription: %w", err)
 	}
@@ -220,17 +234,29 @@ func (s *Service) HandleEventCustomerSubscriptionDeleted(ctx context.Context, ev
 	return nil
 }
 
-func (s *Service) HandleEventInvoicePaid(ctx context.Context, event domain.WebhookEvent) error {
-	if err := s.subscriptionRepo.ProlongSubscription(ctx, event); err != nil {
-		return fmt.Errorf("prolong subscription: %w", err)
+func (s *Service) HandleEventInvoicePaid(ctx context.Context, event mbspDomain.WebhookEvent) error {
+	var err error
+	event.Payment.SubscriptionID, err = s.subscriptionRepo.ProlongSubscription(ctx, event)
+	if err != nil {
+		return fmt.Errorf("create subscription: %w", err)
+	}
+
+	if err := s.paymentRepo.Log(ctx, event.Payment); err != nil {
+		s.logger.Error("failed to log the payment", "err", err)
 	}
 
 	return nil
 }
 
-func (s *Service) HandleEventInvoicePaymentFailed(ctx context.Context, event domain.WebhookEvent) error {
-	if err := s.subscriptionRepo.MarkSubscriptionPaymentFailed(ctx, event); err != nil {
-		return fmt.Errorf("mark subscription payment failed: %w", err)
+func (s *Service) HandleEventInvoicePaymentFailed(ctx context.Context, event mbspDomain.WebhookEvent) error {
+	var err error
+	event.Payment.SubscriptionID, err = s.subscriptionRepo.MarkSubscriptionPaymentFailed(ctx, event)
+	if err != nil {
+		return fmt.Errorf("create subscription: %w", err)
+	}
+
+	if err := s.paymentRepo.Log(ctx, event.Payment); err != nil {
+		s.logger.Error("failed to log the payment", "err", err)
 	}
 
 	return nil

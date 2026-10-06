@@ -129,10 +129,10 @@ func (p *PostgresRepository) GetStripePriceIDByPlanID(ctx context.Context, planI
 	return plan.StripePriceID, nil
 }
 
-func (p *PostgresRepository) CreateSubscription(ctx context.Context, event domain.WebhookEvent) error {
+func (p *PostgresRepository) CreateSubscription(ctx context.Context, event domain.WebhookEvent) (int64, error) {
 	tx, err := p.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer tx.Rollback(ctx)
 
@@ -142,7 +142,7 @@ func (p *PostgresRepository) CreateSubscription(ctx context.Context, event domai
 	WHERE id = $2 AND stripe_customer_id IS NULL
 	`, event.CustomerID, event.UserID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	err = tx.QueryRow(ctx, `
@@ -150,11 +150,11 @@ func (p *PostgresRepository) CreateSubscription(ctx context.Context, event domai
 	current_period_end, cancel_at_period_end, stripe_subscription_id)
 	VALUES($1, $2, $3, $4, $5, $6, $7)
 	RETURNING id
-	`, event.UserID, event.PlanID, event.Status, event.Subscription.CurrentPeriodStart,
+	`, event.UserID, event.PlanID, event.Subscription.Status, event.Subscription.CurrentPeriodStart,
 		event.Subscription.CurrentPeriodEnd, event.Subscription.CancelAtPeriodEnd,
 		event.Subscription.StripeID).Scan(&event.Subscription.ID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -165,10 +165,10 @@ func (p *PostgresRepository) CreateSubscription(ctx context.Context, event domai
 		event.Subscription.CurrentPeriodStart,
 		event.Subscription.CurrentPeriodEnd)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return tx.Commit(ctx)
+	return event.Subscription.ID, tx.Commit(ctx)
 }
 
 func (p *PostgresRepository) CancelSubscription(ctx context.Context, event domain.WebhookEvent) error {
@@ -181,10 +181,10 @@ func (p *PostgresRepository) CancelSubscription(ctx context.Context, event domai
 	return err
 }
 
-func (p *PostgresRepository) ProlongSubscription(ctx context.Context, event domain.WebhookEvent) error {
+func (p *PostgresRepository) ProlongSubscription(ctx context.Context, event domain.WebhookEvent) (int64, error) {
 	tx, err := p.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer tx.Rollback(ctx)
 
@@ -197,7 +197,7 @@ func (p *PostgresRepository) ProlongSubscription(ctx context.Context, event doma
 	`, event.Subscription.Status, event.Subscription.CurrentPeriodStart,
 		event.Subscription.CurrentPeriodEnd, event.Subscription.StripeID).Scan(&event.Subscription.ID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -209,22 +209,23 @@ func (p *PostgresRepository) ProlongSubscription(ctx context.Context, event doma
 		event.Subscription.CurrentPeriodEnd,
 		event.Subscription.Status)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return tx.Commit(ctx)
+	return event.Subscription.ID, tx.Commit(ctx)
 }
 
-func (p *PostgresRepository) MarkSubscriptionPaymentFailed(ctx context.Context, event domain.WebhookEvent) error {
-	_, err := p.db.Exec(ctx, `
+func (p *PostgresRepository) MarkSubscriptionPaymentFailed(ctx context.Context, event domain.WebhookEvent) (int64, error) {
+	err := p.db.QueryRow(ctx, `
 	UPDATE subscriptions
 	SET status = $1, current_period_start = $2,
 	current_period_end = $3, updated_at = NOW()
 	WHERE stripe_subscription_id = $4
+	RETURNING id
 	`, event.Subscription.Status,
 		event.Subscription.CurrentPeriodStart,
 		event.Subscription.CurrentPeriodEnd,
-		event.Subscription.StripeID)
+		event.Subscription.StripeID).Scan(&event.Subscription.ID)
 
-	return err
+	return event.Subscription.ID, err
 }

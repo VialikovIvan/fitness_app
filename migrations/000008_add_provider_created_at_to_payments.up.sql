@@ -1,0 +1,2 @@
+ALTER TABLE payments
+ADD COLUMN provider_created_at TIMESTAMP WITH TIME ZONE NOT NULL;
