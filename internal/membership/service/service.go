@@ -54,6 +54,10 @@ type Stripe interface {
 	GetSubscriptionByID(ctx context.Context, subscriptionID string) (mbspDomain.Subscription, error)
 }
 
+type Publisher interface {
+	PublishStripeWebhook(ctx context.Context, event mbspDomain.WebhookEvent) error
+}
+
 type Service struct {
 	planRepo         PlanRepository
 	subscriptionRepo SubscriptionRepository
@@ -62,13 +66,15 @@ type Service struct {
 	paymentRepo      PaymentRepository
 	cache            Cache
 	stripe           Stripe
+	publisher        Publisher
 	logger           *slog.Logger
 	muMap            map[string]*sync.Mutex
 	muMapLock        sync.Mutex
 }
 
 func New(pr PlanRepository, sr SubscriptionRepository, mr MembershipRepository,
-	ur UserRepository, pmr PaymentRepository, c Cache, s Stripe, l *slog.Logger) *Service {
+	ur UserRepository, pmr PaymentRepository, c Cache, s Stripe, p Publisher,
+	l *slog.Logger) *Service {
 	return &Service{
 		planRepo:         pr,
 		subscriptionRepo: sr,
@@ -77,6 +83,7 @@ func New(pr PlanRepository, sr SubscriptionRepository, mr MembershipRepository,
 		paymentRepo:      pmr,
 		cache:            c,
 		stripe:           s,
+		publisher:        p,
 		logger:           l.With("layer", "service"),
 		muMap:            make(map[string]*sync.Mutex),
 	}
@@ -182,27 +189,8 @@ func (s *Service) HandleStripeWebhook(ctx context.Context, body []byte, sig stri
 		return nil
 	}
 
-	// TODO: Swap the service call for the publish to RabbitMQ
-	// TODO: Make use of payments table
-	switch event.Type {
-	case mbspDomain.EventCheckoutCompleted:
-		err = s.HandleEventCheckoutCompleted(ctx, event)
-	case mbspDomain.EventCustomerSubscriptionDeleted:
-		err = s.HandleEventCustomerSubscriptionDeleted(ctx, event)
-	case mbspDomain.EventInvoicePaid:
-		err = s.HandleEventInvoicePaid(ctx, event)
-	case mbspDomain.EventInvoicePaymentFailed:
-		err = s.HandleEventInvoicePaymentFailed(ctx, event)
-	default:
-		s.logger.Info("unhandled webhook event", "type", event.Type, "id", event.ID)
-	}
-	if err != nil {
-		return err
-	}
-
-	err = s.cache.MarkEventProcessed(ctx, event.ID)
-	if err != nil {
-		s.logger.Error("unexpected cache error", "err", err)
+	if err := s.publisher.PublishStripeWebhook(ctx, event); err != nil {
+		return fmt.Errorf("publish stripe webhook: %w", err)
 	}
 
 	return nil
@@ -223,12 +211,22 @@ func (s *Service) HandleEventCheckoutCompleted(ctx context.Context, event mbspDo
 		s.logger.Error("failed to delete checkout url cache", "err", err)
 	}
 
+	err = s.cache.MarkEventProcessed(ctx, event.ID)
+	if err != nil {
+		s.logger.Error("unexpected cache error", "err", err)
+	}
+
 	return nil
 }
 
 func (s *Service) HandleEventCustomerSubscriptionDeleted(ctx context.Context, event mbspDomain.WebhookEvent) error {
 	if err := s.subscriptionRepo.CancelSubscription(ctx, event); err != nil {
 		return fmt.Errorf("cancel subscription: %w", err)
+	}
+
+	err := s.cache.MarkEventProcessed(ctx, event.ID)
+	if err != nil {
+		s.logger.Error("unexpected cache error", "err", err)
 	}
 
 	return nil
@@ -245,6 +243,11 @@ func (s *Service) HandleEventInvoicePaid(ctx context.Context, event mbspDomain.W
 		s.logger.Error("failed to log the payment", "err", err)
 	}
 
+	err = s.cache.MarkEventProcessed(ctx, event.ID)
+	if err != nil {
+		s.logger.Error("unexpected cache error", "err", err)
+	}
+
 	return nil
 }
 
@@ -259,7 +262,18 @@ func (s *Service) HandleEventInvoicePaymentFailed(ctx context.Context, event mbs
 		s.logger.Error("failed to log the payment", "err", err)
 	}
 
+	err = s.cache.MarkEventProcessed(ctx, event.ID)
+	if err != nil {
+		s.logger.Error("unexpected cache error", "err", err)
+	}
+
 	return nil
+}
+
+func (s *Service) HandleUnknownEvent(ctx context.Context, event mbspDomain.WebhookEvent) {
+	if err := s.cache.MarkEventProcessed(ctx, event.ID); err != nil {
+		s.logger.Error("unexpected cache error", "err", err)
+	}
 }
 
 func (s *Service) getMutexByIdx(idx string) *sync.Mutex {

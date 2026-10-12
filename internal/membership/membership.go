@@ -3,6 +3,7 @@ package membership
 import (
 	"log/slog"
 
+	myrabbitmq "github.com/VialikovIvan/fitness_app/internal/infrastructure/rabbitmq"
 	myredis "github.com/VialikovIvan/fitness_app/internal/infrastructure/redis"
 	mystripe "github.com/VialikovIvan/fitness_app/internal/infrastructure/stripe"
 	membershipRepo "github.com/VialikovIvan/fitness_app/internal/membership/repository"
@@ -12,17 +13,20 @@ import (
 	userRepo "github.com/VialikovIvan/fitness_app/internal/user/repository"
 	"github.com/go-playground/validator/v10"
 	"github.com/jackc/pgx/v5/pgxpool"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/redis/go-redis/v9"
 )
 
-func New(db *pgxpool.Pool, rdb *redis.Client, strp *mystripe.StripeManager, c *myredis.RedisCacher, l *slog.Logger) *transport.Handler {
+func New(db *pgxpool.Pool, rdb *redis.Client, conn *amqp.Connection, strp *mystripe.StripeManager,
+	c *myredis.RedisCacher, p *myrabbitmq.RabbitMQPublisher, l *slog.Logger) (*transport.Handler, *transport.RabbitMQConsumer) {
 	l = l.With("feature", "membership")
 	mr := membershipRepo.NewPostgres(db)
 	ur := userRepo.NewPostgres(db)
 	pmr := paymentRepo.NewPostgres(db)
-	svc := service.New(mr, mr, mr, ur, pmr, c, strp, l)
+	svc := service.New(mr, mr, mr, ur, pmr, c, strp, p, l)
 	v := validator.New()
-	handler := transport.New(svc, v, l)
+	handler := transport.NewHandler(svc, v, l)
+	consumer := transport.NewRabbitMQConsumer(conn, svc, l)
 
-	return handler
+	return handler, consumer
 }

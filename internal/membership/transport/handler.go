@@ -36,7 +36,7 @@ type Handler struct {
 	logger   *slog.Logger
 }
 
-func New(svc MembershipService, v Validator, l *slog.Logger) *Handler {
+func NewHandler(svc MembershipService, v Validator, l *slog.Logger) *Handler {
 	return &Handler{
 		service:  svc,
 		validate: v,

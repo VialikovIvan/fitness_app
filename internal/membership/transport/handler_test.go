@@ -97,7 +97,7 @@ func TestHandler_CreatePlan(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := transport.New(tt.s, validator.New(), logger)
+			h := transport.NewHandler(tt.s, validator.New(), logger)
 
 			req := httptest.NewRequest("POST", "/plans", strings.NewReader(tt.body))
 			rr := httptest.NewRecorder()
@@ -186,7 +186,7 @@ func TestHandler_Checkout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := transport.New(tt.s, validator.New(), logger)
+			h := transport.NewHandler(tt.s, validator.New(), logger)
 
 			req := httptest.NewRequest("POST", "/checkout", strings.NewReader(tt.body))
 			if tt.hasUserID {
@@ -254,7 +254,7 @@ func TestHandler_HandleStripeWebhook(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := transport.New(tt.s, validator.New(), logger)
+			h := transport.NewHandler(tt.s, validator.New(), logger)
 
 			req := httptest.NewRequest("POST", "/webhooks/stripe", strings.NewReader(body))
 			req.Header.Set("Stripe-Signature", sig)

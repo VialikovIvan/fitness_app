@@ -12,6 +12,7 @@ var (
 	ErrStripeWebhookSecretVariableNotFound = errors.New("expected .env variable not found: STRIPE_WEBHOOK_SECRET")
 	ErrRedisURLVariableNotFound            = errors.New("expected .env variable not found: REDIS_URL")
 	ErrBaseURLVariableNotFound             = errors.New("expected .env variable not found: BASE_URL")
+	ErrRabbitMQURLVariableNotFound         = errors.New("expected .env variable not found: RABBITMQ_URL")
 )
 
 type Config struct {
@@ -22,6 +23,7 @@ type Config struct {
 	StripeSecretKey     string
 	StripeWebhookSecret string
 	BaseURL             string
+	RabbitMQURL         string
 }
 
 func NewConfig() (*Config, error) {
@@ -32,33 +34,27 @@ func NewConfig() (*Config, error) {
 	stripeSecretKey := os.Getenv("STRIPE_SECRET_KEY")
 	stripeWebhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
 	baseURL := os.Getenv("BASE_URL")
+	rabbitMQURL := os.Getenv("RABBITMQ_URL")
 
 	if port == "" {
 		port = "8080"
 	}
 
-	if dbURL == "" {
+	switch {
+	case dbURL == "":
 		return nil, ErrDBURLVariableNotFound
-	}
-
-	if jwtSecret == "" {
+	case jwtSecret == "":
 		return nil, ErrJWTSecretVariableNotFound
-	}
-
-	if redisURL == "" {
+	case redisURL == "":
 		return nil, ErrRedisURLVariableNotFound
-	}
-
-	if stripeSecretKey == "" {
+	case stripeSecretKey == "":
 		return nil, ErrStripeSecretKeyVariableNotFound
-	}
-
-	if stripeWebhookSecret == "" {
+	case stripeWebhookSecret == "":
 		return nil, ErrStripeWebhookSecretVariableNotFound
-	}
-
-	if baseURL == "" {
+	case baseURL == "":
 		return nil, ErrBaseURLVariableNotFound
+	case rabbitMQURL == "":
+		return nil, ErrRabbitMQURLVariableNotFound
 	}
 
 	return &Config{
@@ -69,5 +65,6 @@ func NewConfig() (*Config, error) {
 		StripeSecretKey:     stripeSecretKey,
 		StripeWebhookSecret: stripeWebhookSecret,
 		BaseURL:             baseURL,
+		RabbitMQURL:         rabbitMQURL,
 	}, nil
 }

@@ -127,6 +127,14 @@ func (m *MockStripe) GetSubscriptionByID(ctx context.Context, subscriptionID str
 	return m.GetSubscriptionByIDFunc(ctx, subscriptionID)
 }
 
+type MockPublisher struct {
+	PublishStripeWebhookFunc func(ctx context.Context, event mbspDomain.WebhookEvent) error
+}
+
+func (m *MockPublisher) PublishStripeWebhook(ctx context.Context, event mbspDomain.WebhookEvent) error {
+	return m.PublishStripeWebhookFunc(ctx, event)
+}
+
 func TestService_CreatePlan(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -224,8 +232,8 @@ func TestService_CreatePlan(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := service.New(tt.r, &MockSubscriptionRepo{},
-				&MockMembershipRepo{}, &MockUserRepo{},
-				&MockPaymentRepo{}, &MockCache{}, tt.strp, logger)
+				&MockMembershipRepo{}, &MockUserRepo{}, &MockPaymentRepo{},
+				&MockCache{}, tt.strp, &MockPublisher{}, logger)
 
 			err := s.CreatePlan(t.Context(), tt.p)
 			if (err != nil) != tt.wantErr {
@@ -468,8 +476,8 @@ func TestService_CreateCheckoutSession(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := service.New(tt.pr, &MockSubscriptionRepo{},
-				tt.r, tt.ur, &MockPaymentRepo{},
-				tt.c, tt.strp, logger)
+				tt.r, tt.ur, &MockPaymentRepo{}, tt.c,
+				tt.strp, &MockPublisher{}, logger)
 
 			got, err := s.CreateCheckoutSession(t.Context(), tt.params)
 			if (err != nil) != tt.wantErr {
@@ -488,20 +496,14 @@ func TestService_HandleStripeWebhook(t *testing.T) {
 		name    string
 		c       service.Cache
 		strp    service.Stripe
-		r       service.SubscriptionRepository
+		p       service.Publisher
 		wantErr bool
 	}{
 		{
-			name: "checkout completed — success",
+			name: "success — publishes event",
 			c: &MockCache{
-				DeleteCheckoutURLFunc: func(ctx context.Context, idx string) error {
-					return nil
-				},
 				EventIsProcessedFunc: func(ctx context.Context, eventID string) (bool, error) {
 					return false, nil
-				},
-				MarkEventProcessedFunc: func(ctx context.Context, eventID string) error {
-					return nil
 				},
 			},
 			strp: &MockStripe{
@@ -512,107 +514,11 @@ func TestService_HandleStripeWebhook(t *testing.T) {
 					}, nil
 				},
 			},
-			r: &MockSubscriptionRepo{
-				CreateSubscriptionFunc: func(ctx context.Context, event mbspDomain.WebhookEvent) (int64, error) {
-					return 1, nil
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "subscription deleted — success",
-			c: &MockCache{
-				EventIsProcessedFunc: func(ctx context.Context, eventID string) (bool, error) {
-					return false, nil
-				},
-				MarkEventProcessedFunc: func(ctx context.Context, eventID string) error {
+			p: &MockPublisher{
+				PublishStripeWebhookFunc: func(ctx context.Context, event mbspDomain.WebhookEvent) error {
 					return nil
 				},
 			},
-			strp: &MockStripe{
-				VerifyWebhookFunc: func(ctx context.Context, body []byte, sig string) (mbspDomain.WebhookEvent, error) {
-					return mbspDomain.WebhookEvent{
-						ID:   "evt_2",
-						Type: mbspDomain.EventCustomerSubscriptionDeleted,
-					}, nil
-				},
-			},
-			r: &MockSubscriptionRepo{
-				CancelSubscriptionFunc: func(ctx context.Context, event mbspDomain.WebhookEvent) error {
-					return nil
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "invoice paid — success",
-			c: &MockCache{
-				EventIsProcessedFunc: func(ctx context.Context, eventID string) (bool, error) {
-					return false, nil
-				},
-				MarkEventProcessedFunc: func(ctx context.Context, eventID string) error {
-					return nil
-				},
-			},
-			strp: &MockStripe{
-				VerifyWebhookFunc: func(ctx context.Context, body []byte, sig string) (mbspDomain.WebhookEvent, error) {
-					return mbspDomain.WebhookEvent{
-						ID:   "evt_3",
-						Type: mbspDomain.EventInvoicePaid,
-					}, nil
-				},
-			},
-			r: &MockSubscriptionRepo{
-				ProlongSubscriptionFunc: func(ctx context.Context, event mbspDomain.WebhookEvent) (int64, error) {
-					return 1, nil
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "invoice payment failed — success",
-			c: &MockCache{
-				EventIsProcessedFunc: func(ctx context.Context, eventID string) (bool, error) {
-					return false, nil
-				},
-				MarkEventProcessedFunc: func(ctx context.Context, eventID string) error {
-					return nil
-				},
-			},
-			strp: &MockStripe{
-				VerifyWebhookFunc: func(ctx context.Context, body []byte, sig string) (mbspDomain.WebhookEvent, error) {
-					return mbspDomain.WebhookEvent{
-						ID:   "evt_4",
-						Type: mbspDomain.EventInvoicePaymentFailed,
-					}, nil
-				},
-			},
-			r: &MockSubscriptionRepo{
-				MarkSubscriptionPaymentFailedFunc: func(ctx context.Context, event mbspDomain.WebhookEvent) (int64, error) {
-					return 1, nil
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "unhandled event — returns nil",
-			c: &MockCache{
-				EventIsProcessedFunc: func(ctx context.Context, eventID string) (bool, error) {
-					return false, nil
-				},
-				MarkEventProcessedFunc: func(ctx context.Context, eventID string) error {
-					return nil
-				},
-			},
-			strp: &MockStripe{
-				VerifyWebhookFunc: func(ctx context.Context, body []byte, sig string) (mbspDomain.WebhookEvent, error) {
-					return mbspDomain.WebhookEvent{
-						ID:   "evt_5",
-						Type: mbspDomain.EventType("event.not.handled"),
-					}, nil
-				},
-			},
-			r:       &MockSubscriptionRepo{},
 			wantErr: false,
 		},
 		{
@@ -623,7 +529,7 @@ func TestService_HandleStripeWebhook(t *testing.T) {
 					return mbspDomain.WebhookEvent{}, errors.New("invalid")
 				},
 			},
-			r:       &MockSubscriptionRepo{},
+			p:       &MockPublisher{},
 			wantErr: true,
 		},
 		{
@@ -636,12 +542,12 @@ func TestService_HandleStripeWebhook(t *testing.T) {
 			strp: &MockStripe{
 				VerifyWebhookFunc: func(ctx context.Context, body []byte, sig string) (mbspDomain.WebhookEvent, error) {
 					return mbspDomain.WebhookEvent{
-						ID:   "evt_6",
+						ID:   "evt_2",
 						Type: mbspDomain.EventInvoicePaid,
 					}, nil
 				},
 			},
-			r:       &MockSubscriptionRepo{},
+			p:       &MockPublisher{},
 			wantErr: false,
 		},
 		{
@@ -654,16 +560,16 @@ func TestService_HandleStripeWebhook(t *testing.T) {
 			strp: &MockStripe{
 				VerifyWebhookFunc: func(ctx context.Context, body []byte, sig string) (mbspDomain.WebhookEvent, error) {
 					return mbspDomain.WebhookEvent{
-						ID:   "evt_7",
+						ID:   "evt_3",
 						Type: mbspDomain.EventInvoicePaid,
 					}, nil
 				},
 			},
-			r:       &MockSubscriptionRepo{},
+			p:       &MockPublisher{},
 			wantErr: true,
 		},
 		{
-			name: "database error",
+			name: "publish error",
 			c: &MockCache{
 				EventIsProcessedFunc: func(ctx context.Context, eventID string) (bool, error) {
 					return false, nil
@@ -672,14 +578,14 @@ func TestService_HandleStripeWebhook(t *testing.T) {
 			strp: &MockStripe{
 				VerifyWebhookFunc: func(ctx context.Context, body []byte, sig string) (mbspDomain.WebhookEvent, error) {
 					return mbspDomain.WebhookEvent{
-						ID:   "evt_8",
+						ID:   "evt_4",
 						Type: mbspDomain.EventInvoicePaid,
 					}, nil
 				},
 			},
-			r: &MockSubscriptionRepo{
-				ProlongSubscriptionFunc: func(ctx context.Context, event mbspDomain.WebhookEvent) (int64, error) {
-					return 0, errors.New("db error")
+			p: &MockPublisher{
+				PublishStripeWebhookFunc: func(ctx context.Context, event mbspDomain.WebhookEvent) error {
+					return errors.New("rabbit down")
 				},
 			},
 			wantErr: true,
@@ -692,9 +598,9 @@ func TestService_HandleStripeWebhook(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := service.New(&MockPlanRepo{}, tt.r,
+			s := service.New(&MockPlanRepo{}, &MockSubscriptionRepo{},
 				&MockMembershipRepo{}, &MockUserRepo{},
-				&MockPaymentRepo{}, tt.c, tt.strp, logger)
+				&MockPaymentRepo{}, tt.c, tt.strp, tt.p, logger)
 
 			err := s.HandleStripeWebhook(t.Context(), body, sig)
 			if (err != nil) != tt.wantErr {

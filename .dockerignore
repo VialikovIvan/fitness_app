@@ -19,3 +19,6 @@ Dockerfile
 .dockerignore
 
 setup.sh
+
+rabbitmq/definitions.json
+rabbitmq/rabbitmq.conf
