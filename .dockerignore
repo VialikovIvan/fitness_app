@@ -4,6 +4,7 @@
 
 .vscode
 .env
+.env.bak
 .DS_Store
 
 *.exe

@@ -8,12 +8,19 @@ An application for managing fitness club access with integrated payment system.
 - PostgreSQL 16
 - Redis 7
 - Docker
+- Stripe API
+- RabbitMQ 3.13
 
 ## Requirements
 
 - Docker
+- [Stripe CLI](https://docs.stripe.com/cli)
+- Be logged into Stripe:
+```bash
+stripe login
+```
 
-## First start
+## First start (localhost)
 
 ### 1. Clone the repository.
 
@@ -33,5 +40,21 @@ chmod +x setup.sh
 ## Following starts
 
 ```bash
-docker compose up
+docker compose up -d
 ```
+
+In a separate terminal:
+
+```bash
+stripe listen --forward-to localhost:8080/webhooks/stripe --all-snapshot
+```
+
+## Ports
+
+| Service | Port |
+|---------|------|
+| App | 8080 |
+| Postgres | 5432 |
+| Redis | 6379 |
+| RabbitMQ AMQP | 5672 |
+| RabbitMQ UI | 15672 |
