@@ -25,6 +25,7 @@ type User struct {
 	MiddleName   string
 	LastName     string
 	Email        string
+	Role         string
 }
 
 func IsValidPasswordLength(plainPassword string) bool {

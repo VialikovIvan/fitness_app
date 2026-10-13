@@ -15,13 +15,14 @@ func (m *Manager) AuthOnly(next http.Handler) http.Handler {
 
 		token := cookie.Value
 
-		userID, err := m.tokenValidator.Validate(r.Context(), token)
+		userID, role, err := m.tokenValidator.Validate(r.Context(), token)
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}
 
 		ctx := context.WithValue(r.Context(), "userID", userID)
+		ctx = context.WithValue(ctx, "role", role)
 		r = r.WithContext(ctx)
 
 		next.ServeHTTP(w, r)
@@ -34,7 +35,7 @@ func (m *Manager) GuestOnly(next http.Handler) http.Handler {
 		if err == nil {
 			token := cookie.Value
 
-			_, err := m.tokenValidator.Validate(r.Context(), token)
+			_, _, err := m.tokenValidator.Validate(r.Context(), token)
 			if err == nil {
 				http.Error(w, "Already authenticated", http.StatusForbidden)
 				return 
@@ -43,4 +44,22 @@ func (m *Manager) GuestOnly(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func GetUserID(r *http.Request) (int64, bool) {
+	rawUserID := r.Context().Value("userID")
+	if rawUserID == nil {
+		return 0, false
+	}
+	userID, ok := rawUserID.(int64)
+	return userID, ok
+}
+
+func GetRole(r *http.Request) (string, bool) {
+	rawRole := r.Context().Value("role")
+	if rawRole == nil {
+		return "", false
+	}
+	role, ok := rawRole.(string)
+	return role, ok
 }

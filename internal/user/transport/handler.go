@@ -12,7 +12,10 @@ import (
 	"github.com/VialikovIvan/fitness_app/internal/user/domain"
 )
 
-const cookieValidityTime = 24 * time.Hour
+const (
+	cookieValidityTime = 24 * time.Hour
+	serviceCallTimeout = 3 * time.Second
+)
 
 type AuthService interface {
 	Register(ctx context.Context, user domain.User, plainPassword string) (string, error)
@@ -87,7 +90,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Email:      req.Email,
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), serviceCallTimeout)
 	defer cancel()
 
 	token, err := h.service.Register(ctx, user, req.Password)
@@ -148,7 +151,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Email: req.Email,
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), serviceCallTimeout)
 	defer cancel()
 
 	token, err := h.service.Login(ctx, user, req.Password)

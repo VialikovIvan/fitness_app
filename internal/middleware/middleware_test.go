@@ -23,10 +23,10 @@ func (m *MockLimiter) AllowRequestByIP(ctx context.Context, ip string) (bool, er
 }
 
 type MockTokenValidator struct {
-	ValidateFunc func(ctx context.Context, tokenStr string) (int64, error)
+	ValidateFunc func(ctx context.Context, tokenStr string) (int64, string, error)
 }
 
-func (m *MockTokenValidator) Validate(ctx context.Context, tokenStr string) (int64, error) {
+func (m *MockTokenValidator) Validate(ctx context.Context, tokenStr string) (int64, string, error) {
 	return m.ValidateFunc(ctx, tokenStr)
 }
 
@@ -212,8 +212,8 @@ func TestManager_AuthOnly(t *testing.T) {
 			name: "authorized",
 			newManager: func() *middleware.Manager {
 				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
-					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
-						return 1, nil
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
+						return 1, "user", nil
 					},
 				})
 			},
@@ -228,8 +228,8 @@ func TestManager_AuthOnly(t *testing.T) {
 			name: "no cookie",
 			newManager: func() *middleware.Manager {
 				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
-					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
-						return 0, nil
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
+						return 0, "", nil
 					},
 				})
 			},
@@ -239,8 +239,8 @@ func TestManager_AuthOnly(t *testing.T) {
 			name: "validation error",
 			newManager: func() *middleware.Manager {
 				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
-					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
-						return 0, errors.New("error")
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
+						return 0, "", errors.New("error")
 					},
 				})
 			},
@@ -298,8 +298,8 @@ func TestManager_GuestOnly(t *testing.T) {
 			name: "guest allowed (no cookie)",
 			newManager: func() *middleware.Manager {
 				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
-					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
-						return 1, nil
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
+						return 1, "user", nil
 					},
 				})
 			},
@@ -309,8 +309,8 @@ func TestManager_GuestOnly(t *testing.T) {
 			name: "guest allowed (invalid token)",
 			newManager: func() *middleware.Manager {
 				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
-					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
-						return 0, errors.New("error")
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
+						return 0, "", errors.New("error")
 					},
 				})
 			},
@@ -324,8 +324,8 @@ func TestManager_GuestOnly(t *testing.T) {
 			name: "blocked (valid token)",
 			newManager: func() *middleware.Manager {
 				return middleware.New(logger, &MockLimiter{}, &MockTokenValidator{
-					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, error) {
-						return 1, nil
+					ValidateFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
+						return 1, "user", nil
 					},
 				})
 			},
@@ -348,6 +348,56 @@ func TestManager_GuestOnly(t *testing.T) {
 			req := httptest.NewRequest("GET", "/test", nil)
 			if tt.cookieSetup != nil {
 				req.AddCookie(tt.cookieSetup)
+			}
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+
+			if rr.Code != tt.wantStatus {
+				t.Errorf("status code: got = %v, want %v", rr.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestManager_RequireAdmin(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	tests := []struct {
+		name       string
+		role       string // Fill in unless want status 500
+		wantStatus int
+	}{
+		{
+			name:       "access allowed",
+			role:       "admin",
+			wantStatus: 200,
+		},
+		{
+			name:       "access denied",
+			role:       "user",
+			wantStatus: 403,
+		},
+		{
+			name:       "no role in context",
+			wantStatus: 500,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := middleware.New(logger, &MockLimiter{}, &MockTokenValidator{})
+
+			handler := m.RequireAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			var req *http.Request
+			if tt.role != "" {
+				req = httptest.NewRequestWithContext(context.WithValue(context.Background(), "role", tt.role),
+					"GET", "/test", nil)
+			} else {
+				req = httptest.NewRequest("GET", "/test", nil)
 			}
 			rr := httptest.NewRecorder()
 

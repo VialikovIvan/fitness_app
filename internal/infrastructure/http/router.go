@@ -5,23 +5,26 @@ import (
 	"slices"
 
 	health "github.com/VialikovIvan/fitness_app/internal/health/transport"
+	membership "github.com/VialikovIvan/fitness_app/internal/membership/transport"
 	"github.com/VialikovIvan/fitness_app/internal/middleware"
 	user "github.com/VialikovIvan/fitness_app/internal/user/transport"
 )
 
 type Router struct {
-	mw     *middleware.Manager
-	mux    *http.ServeMux
-	health *health.Handler
-	user   *user.Handler
+	mw         *middleware.Manager
+	mux        *http.ServeMux
+	health     *health.Handler
+	user       *user.Handler
+	membership *membership.Handler
 }
 
-func NewRouter(mw *middleware.Manager, h *health.Handler, u *user.Handler) *Router {
+func NewRouter(mw *middleware.Manager, h *health.Handler, m *membership.Handler, u *user.Handler) *Router {
 	return &Router{
-		mw:     mw,
-		mux:    http.NewServeMux(),
-		health: h,
-		user:   u,
+		mw:         mw,
+		mux:        http.NewServeMux(),
+		health:     h,
+		membership: m,
+		user:       u,
 	}
 }
 
@@ -32,6 +35,12 @@ func (r *Router) Setup() http.Handler {
 	r.guestOnly("POST /login", r.user.Login)
 
 	r.authOnly("POST /logout", r.user.Logout)
+	r.authOnly("GET /plans", r.membership.GetPlans)
+	r.authOnly("POST /checkout", r.membership.Checkout)
+
+	r.requireAdmin("POST /plans", r.membership.CreatePlan)
+
+	r.public("POST /webhooks/stripe", r.membership.HandleStripeWebhook)
 
 	// Return globally wrapped
 	return chainMiddlewares(r.mux, r.mw.Recovery, r.mw.EnrichContext, r.mw.TrackRequest, r.mw.RateLimit)
@@ -47,6 +56,10 @@ func (r *Router) guestOnly(pattern string, h func(http.ResponseWriter, *http.Req
 
 func (r *Router) public(pattern string, h func(http.ResponseWriter, *http.Request)) {
 	r.mux.HandleFunc(pattern, h)
+}
+
+func (r *Router) requireAdmin(pattern string, h func(http.ResponseWriter, *http.Request)) {
+	r.mux.Handle(pattern, r.mw.AuthOnly(r.mw.RequireAdmin(http.HandlerFunc(h))))
 }
 
 func chainMiddlewares(handler http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {

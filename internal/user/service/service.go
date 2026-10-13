@@ -10,8 +10,8 @@ import (
 )
 
 type UserRepository interface {
-	Create(ctx context.Context, u domain.User, hash string) (int64, error)
-	GetIDAndHashByEmail(ctx context.Context, email string) (int64, string, error)
+	Create(ctx context.Context, u domain.User, hash string) (domain.User, error)
+	GetCredentialsByEmail(ctx context.Context, email string) (domain.User, string, error)
 }
 
 type PasswordManager interface {
@@ -20,7 +20,7 @@ type PasswordManager interface {
 }
 
 type TokenGenerator interface {
-	Generate(ctx context.Context, userID int64) (string, error)
+	Generate(ctx context.Context, userID int64, role string) (string, error)
 }
 
 type Service struct {
@@ -53,7 +53,7 @@ func (s *Service) Register(ctx context.Context, u domain.User, plainPassword str
 		return "", fmt.Errorf("hash password: %w", err)
 	}
 
-	u.ID, err = s.userRepo.Create(ctx, u, hash)
+	user, err := s.userRepo.Create(ctx, u, hash)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserAlreadyExists) {
 			return "", err
@@ -61,7 +61,7 @@ func (s *Service) Register(ctx context.Context, u domain.User, plainPassword str
 		return "", fmt.Errorf("create user: %w", err)
 	}
 
-	token, err := s.tokenGenerator.Generate(ctx, u.ID)
+	token, err := s.tokenGenerator.Generate(ctx, user.ID, user.Role)
 	if err != nil {
 		return "", fmt.Errorf("generate token: %w", err)
 	}
@@ -80,12 +80,12 @@ func (s *Service) Login(ctx context.Context, u domain.User, plainPassword string
 		return "", domain.ErrInvalidPasswordLength
 	}
 
-	userID, hash, err := s.userRepo.GetIDAndHashByEmail(ctx, u.Email)
+	user, hash, err := s.userRepo.GetCredentialsByEmail(ctx, u.Email)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserDoesNotExist) {
 			return "", err
 		}
-		return "", fmt.Errorf("get user by email: %w", err)
+		return "", fmt.Errorf("get credentials by email: %w", err)
 	}
 
 	verified, err := s.passwordManager.Verify(hash, plainPassword)
@@ -96,7 +96,7 @@ func (s *Service) Login(ctx context.Context, u domain.User, plainPassword string
 		return "", domain.ErrInvalidPassword
 	}
 
-	token, err := s.tokenGenerator.Generate(ctx, userID)
+	token, err := s.tokenGenerator.Generate(ctx, user.ID, user.Role)
 	if err != nil {
 		return "", fmt.Errorf("generate token: %w", err)
 	}

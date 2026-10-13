@@ -4,6 +4,7 @@
 
 .vscode
 .env
+.env.bak
 .DS_Store
 
 *.exe
@@ -19,3 +20,6 @@ Dockerfile
 .dockerignore
 
 setup.sh
+
+rabbitmq/definitions.json
+rabbitmq/rabbitmq.conf

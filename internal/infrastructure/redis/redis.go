@@ -3,12 +3,25 @@ package myredis
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
-const RedisPingTimeout = 5*time.Second
+const redisPingTimeout = 5 * time.Second
+
+var ErrNoSuchKey = errors.New("no such key")
+
+type RedisCacher struct {
+	rdb *redis.Client
+}
+
+func NewCacher(rdb *redis.Client) *RedisCacher {
+	return &RedisCacher{
+		rdb: rdb,
+	}
+}
 
 func InitRedis(redisAddr string) (*redis.Client, error) {
 	rdb := redis.NewClient(&redis.Options{
@@ -17,7 +30,7 @@ func InitRedis(redisAddr string) (*redis.Client, error) {
 		DB:       0,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), RedisPingTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), redisPingTimeout)
 	defer cancel()
 
 	if _, err := rdb.Ping(ctx).Result(); err != nil {
