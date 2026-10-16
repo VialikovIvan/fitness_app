@@ -19,7 +19,8 @@ import (
 	mystripe "github.com/VialikovIvan/fitness_app/internal/infrastructure/stripe"
 	"github.com/VialikovIvan/fitness_app/internal/membership"
 	"github.com/VialikovIvan/fitness_app/internal/middleware"
-	"github.com/VialikovIvan/fitness_app/internal/pkg/jwt"
+	myjwt "github.com/VialikovIvan/fitness_app/internal/pkg/jwt"
+	"github.com/VialikovIvan/fitness_app/internal/qrcode"
 	"github.com/VialikovIvan/fitness_app/internal/user"
 	"github.com/joho/godotenv"
 	"github.com/stripe/stripe-go/v86"
@@ -79,17 +80,18 @@ func main() {
 	sc := stripe.NewClient(cfg.StripeSecretKey)
 
 	cacher := myredis.NewCacher(rdb)
-	tokenValidator := jwt.New(cfg.JWTSecret)
+	tokenManager := myjwt.New(cfg.JWTAuthSecret, cfg.JWTAccessSecret)
 	stripeManager := mystripe.New(sc, cfg.BaseURL, cfg.StripeWebhookSecret)
 	rbtmqPublisher := myrabbitmq.NewPublisher(rbtmq)
 
-	mwManager := middleware.New(logger, cacher, tokenValidator)
+	mwManager := middleware.New(logger, cacher, tokenManager, cfg.TurnstileAPIKey)
 
 	healthHandler := health.New()
-	membershipHandler, eventConsumer := membership.New(db, rdb, rbtmq, stripeManager, cacher, rbtmqPublisher, logger)
-	userHandler := user.New(db, cfg.JWTSecret, logger)
+	membershipHandler, eventConsumer := membership.New(db, rbtmq, stripeManager, cacher, rbtmqPublisher, logger)
+	userHandler := user.New(db, tokenManager, logger)
+	qrcodeHandler := qrcode.New(db, tokenManager, cacher, logger, cfg.BaseURL)
 
-	router := myhttp.NewRouter(mwManager, healthHandler, membershipHandler, userHandler)
+	router := myhttp.NewRouter(mwManager, healthHandler, membershipHandler, userHandler, qrcodeHandler)
 	server := myhttp.NewServer(cfg.Port, router.Setup())
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

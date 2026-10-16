@@ -20,7 +20,7 @@ type PasswordManager interface {
 }
 
 type TokenGenerator interface {
-	Generate(ctx context.Context, userID int64, role string) (string, error)
+	GenerateAuth(ctx context.Context, userID int64, role string) (string, error)
 }
 
 type Service struct {
@@ -61,9 +61,9 @@ func (s *Service) Register(ctx context.Context, u domain.User, plainPassword str
 		return "", fmt.Errorf("create user: %w", err)
 	}
 
-	token, err := s.tokenGenerator.Generate(ctx, user.ID, user.Role)
+	token, err := s.tokenGenerator.GenerateAuth(ctx, user.ID, user.Role)
 	if err != nil {
-		return "", fmt.Errorf("generate token: %w", err)
+		return "", fmt.Errorf("generate auth token: %w", err)
 	}
 
 	return token, nil
@@ -96,9 +96,9 @@ func (s *Service) Login(ctx context.Context, u domain.User, plainPassword string
 		return "", domain.ErrInvalidPassword
 	}
 
-	token, err := s.tokenGenerator.Generate(ctx, user.ID, user.Role)
+	token, err := s.tokenGenerator.GenerateAuth(ctx, user.ID, user.Role)
 	if err != nil {
-		return "", fmt.Errorf("generate token: %w", err)
+		return "", fmt.Errorf("generate auth token: %w", err)
 	}
 
 	return token, nil

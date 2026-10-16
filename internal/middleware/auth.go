@@ -15,7 +15,7 @@ func (m *Manager) AuthOnly(next http.Handler) http.Handler {
 
 		token := cookie.Value
 
-		userID, role, err := m.tokenValidator.Validate(r.Context(), token)
+		userID, role, err := m.tokenValidator.ValidateAuth(r.Context(), token)
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
@@ -35,7 +35,7 @@ func (m *Manager) GuestOnly(next http.Handler) http.Handler {
 		if err == nil {
 			token := cookie.Value
 
-			_, _, err := m.tokenValidator.Validate(r.Context(), token)
+			_, _, err := m.tokenValidator.ValidateAuth(r.Context(), token)
 			if err == nil {
 				http.Error(w, "Already authenticated", http.StatusForbidden)
 				return 
@@ -44,6 +44,17 @@ func (m *Manager) GuestOnly(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (m *Manager) RequireAPIKey(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        key := r.Header.Get("X-API-Key")
+        if key != m.turnstileAPIKey {
+            http.Error(w, "Unauthorized", http.StatusUnauthorized)
+            return
+        }
+        next.ServeHTTP(w, r)
+    })
 }
 
 func GetUserID(r *http.Request) (int64, bool) {

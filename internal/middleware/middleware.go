@@ -11,22 +11,24 @@ type Limiter interface {
 }
 
 type TokenValidator interface {
-	Validate(ctx context.Context, tokenStr string) (int64, string, error)
+	ValidateAuth(ctx context.Context, tokenStr string) (int64, string, error)
 }
 
 type Manager struct {
-	logger         *slog.Logger
-	limiter        Limiter
-	tokenValidator TokenValidator
-	muMap          map[string]*sync.Mutex
-	muMapLock      sync.Mutex
+	logger          *slog.Logger
+	limiter         Limiter
+	tokenValidator  TokenValidator
+	turnstileAPIKey string
+	muMap           map[string]*sync.Mutex
+	muMapLock       sync.Mutex
 }
 
-func New(l *slog.Logger, lim Limiter, t TokenValidator) *Manager {
+func New(l *slog.Logger, lim Limiter, t TokenValidator, key string) *Manager {
 	return &Manager{
-		logger:         l,
-		limiter:        lim,
-		tokenValidator: t,
-		muMap:          make(map[string]*sync.Mutex),
+		logger:          l,
+		limiter:         lim,
+		tokenValidator:  t,
+		turnstileAPIKey: key,
+		muMap:           make(map[string]*sync.Mutex),
 	}
 }

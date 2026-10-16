@@ -14,8 +14,14 @@ sed -i "s|your_stripe_secret_key_here|$STRIPE_SECRET_KEY|g" .env
 sed -i "s|your_stripe_webhook_secret_here|$(stripe listen --print-secret)|g" .env
 echo "Stripe webhook secret generated and set! Proceeding to the next step.."
 
-sed -i "s|your_jwt_secret_here|$(openssl rand -base64 32)|g" .env
-echo "Random JWT secret generated and set! Proceeding to the next step.."
+sed -i "s|your_jwt_auth_secret_here|$(openssl rand -base64 32)|g" .env
+echo "Random JWT auth secret generated and set! Proceeding to the next step.."
+
+sed -i "s|your_jwt_access_secret_here|$(openssl rand -base64 32)|g" .env
+echo "Random JWT access secret generated and set! Proceeding to the next step.."
+
+sed -i "s|your_turnstile_api_key_here|$(openssl rand -base64 32)|g" .env
+echo "Random turnstile API key generated and set! Proceeding to the next step.."
 
 read -p "Choose a database password: " DB_PASSWORD
 sed -i "s|your_db_password_here|$DB_PASSWORD|g" .env

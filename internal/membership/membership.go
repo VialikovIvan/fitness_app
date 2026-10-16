@@ -14,10 +14,9 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/jackc/pgx/v5/pgxpool"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/redis/go-redis/v9"
 )
 
-func New(db *pgxpool.Pool, rdb *redis.Client, conn *amqp.Connection, strp *mystripe.StripeManager,
+func New(db *pgxpool.Pool, conn *amqp.Connection, strp *mystripe.StripeManager,
 	c *myredis.RedisCacher, p *myrabbitmq.RabbitMQPublisher, l *slog.Logger) (*transport.Handler, *transport.RabbitMQConsumer) {
 	l = l.With("feature", "membership")
 	mr := membershipRepo.NewPostgres(db)

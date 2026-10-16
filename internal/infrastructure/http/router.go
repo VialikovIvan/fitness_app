@@ -7,6 +7,7 @@ import (
 	health "github.com/VialikovIvan/fitness_app/internal/health/transport"
 	membership "github.com/VialikovIvan/fitness_app/internal/membership/transport"
 	"github.com/VialikovIvan/fitness_app/internal/middleware"
+	qrcode "github.com/VialikovIvan/fitness_app/internal/qrcode/transport"
 	user "github.com/VialikovIvan/fitness_app/internal/user/transport"
 )
 
@@ -16,20 +17,23 @@ type Router struct {
 	health     *health.Handler
 	user       *user.Handler
 	membership *membership.Handler
+	qrcode     *qrcode.Handler
 }
 
-func NewRouter(mw *middleware.Manager, h *health.Handler, m *membership.Handler, u *user.Handler) *Router {
+func NewRouter(mw *middleware.Manager, h *health.Handler, m *membership.Handler, u *user.Handler, qr *qrcode.Handler) *Router {
 	return &Router{
 		mw:         mw,
 		mux:        http.NewServeMux(),
 		health:     h,
 		membership: m,
 		user:       u,
+		qrcode:     qr,
 	}
 }
 
 func (r *Router) Setup() http.Handler {
 	r.public("GET /health", r.health.HandleHealth)
+	r.public("POST /webhooks/stripe", r.membership.HandleStripeWebhook)
 
 	r.guestOnly("POST /register", r.user.Register)
 	r.guestOnly("POST /login", r.user.Login)
@@ -37,10 +41,11 @@ func (r *Router) Setup() http.Handler {
 	r.authOnly("POST /logout", r.user.Logout)
 	r.authOnly("GET /plans", r.membership.GetPlans)
 	r.authOnly("POST /checkout", r.membership.Checkout)
+	r.authOnly("GET /qr", r.qrcode.GetQR)
 
 	r.requireAdmin("POST /plans", r.membership.CreatePlan)
 
-	r.public("POST /webhooks/stripe", r.membership.HandleStripeWebhook)
+	r.turnstileOnly("GET /access", r.qrcode.VerifyAccess)
 
 	// Return globally wrapped
 	return chainMiddlewares(r.mux, r.mw.Recovery, r.mw.EnrichContext, r.mw.TrackRequest, r.mw.RateLimit)
@@ -60,6 +65,10 @@ func (r *Router) public(pattern string, h func(http.ResponseWriter, *http.Reques
 
 func (r *Router) requireAdmin(pattern string, h func(http.ResponseWriter, *http.Request)) {
 	r.mux.Handle(pattern, r.mw.AuthOnly(r.mw.RequireAdmin(http.HandlerFunc(h))))
+}
+
+func (r *Router) turnstileOnly(pattern string, h func(http.ResponseWriter, *http.Request)) {
+	r.mux.Handle(pattern, r.mw.RequireAPIKey(http.HandlerFunc(h)))
 }
 
 func chainMiddlewares(handler http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {

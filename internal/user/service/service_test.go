@@ -10,7 +10,7 @@ import (
 )
 
 type MockRepo struct {
-	CreateFunc              func(ctx context.Context, u domain.User, hash string) (domain.User, error)
+	CreateFunc                func(ctx context.Context, u domain.User, hash string) (domain.User, error)
 	GetCredentialsByEmailFunc func(ctx context.Context, email string) (domain.User, string, error)
 }
 
@@ -36,11 +36,11 @@ func (m *MockPWManager) Verify(encoded, providedPassword string) (bool, error) {
 }
 
 type MockTKGenerator struct {
-	GenerateFunc func(ctx context.Context, userID int64, role string) (string, error)
+	GenerateAuthFunc func(ctx context.Context, userID int64, role string) (string, error)
 }
 
-func (m *MockTKGenerator) Generate(ctx context.Context, userID int64, role string) (string, error) {
-	return m.GenerateFunc(ctx, userID, role)
+func (m *MockTKGenerator) GenerateAuth(ctx context.Context, userID int64, role string) (string, error) {
+	return m.GenerateAuthFunc(ctx, userID, role)
 }
 
 func TestService_Register(t *testing.T) {
@@ -66,7 +66,7 @@ func TestService_Register(t *testing.T) {
 			r: &MockRepo{
 				CreateFunc: func(ctx context.Context, u domain.User, hash string) (domain.User, error) {
 					return domain.User{
-						ID: 1,
+						ID:   1,
 						Role: "user",
 					}, nil
 				},
@@ -77,7 +77,7 @@ func TestService_Register(t *testing.T) {
 				},
 			},
 			t: &MockTKGenerator{
-				GenerateFunc: func(ctx context.Context, userID int64, role string) (string, error) {
+				GenerateAuthFunc: func(ctx context.Context, userID int64, role string) (string, error) {
 					return "aTokenToBeReturned", nil
 				},
 			},
@@ -96,7 +96,7 @@ func TestService_Register(t *testing.T) {
 			r: &MockRepo{
 				CreateFunc: func(ctx context.Context, u domain.User, hash string) (domain.User, error) {
 					return domain.User{
-						ID: 1,
+						ID:   1,
 						Role: "user",
 					}, nil
 				},
@@ -107,7 +107,7 @@ func TestService_Register(t *testing.T) {
 				},
 			},
 			t: &MockTKGenerator{
-				GenerateFunc: func(ctx context.Context, userID int64, role string) (string, error) {
+				GenerateAuthFunc: func(ctx context.Context, userID int64, role string) (string, error) {
 					return "aTokenToBeReturned", nil
 				},
 			},
@@ -134,7 +134,7 @@ func TestService_Register(t *testing.T) {
 				},
 			},
 			t: &MockTKGenerator{
-				GenerateFunc: func(ctx context.Context, userID int64, role string) (string, error) {
+				GenerateAuthFunc: func(ctx context.Context, userID int64, role string) (string, error) {
 					return "aTokenToBeReturned", nil
 				},
 			},
@@ -153,7 +153,7 @@ func TestService_Register(t *testing.T) {
 			r: &MockRepo{
 				CreateFunc: func(ctx context.Context, u domain.User, hash string) (domain.User, error) {
 					return domain.User{
-						ID: 1,
+						ID:   1,
 						Role: "user",
 					}, nil
 				},
@@ -164,7 +164,7 @@ func TestService_Register(t *testing.T) {
 				},
 			},
 			t: &MockTKGenerator{
-				GenerateFunc: func(ctx context.Context, userID int64, role string) (string, error) {
+				GenerateAuthFunc: func(ctx context.Context, userID int64, role string) (string, error) {
 					return "", errors.New("error")
 				},
 			},
@@ -208,7 +208,7 @@ func TestService_Login(t *testing.T) {
 			r: &MockRepo{
 				GetCredentialsByEmailFunc: func(ctx context.Context, email string) (domain.User, string, error) {
 					return domain.User{
-						ID: 1,
+						ID:   1,
 						Role: "user",
 					}, "aValidHash", nil
 				},
@@ -219,7 +219,7 @@ func TestService_Login(t *testing.T) {
 				},
 			},
 			t: &MockTKGenerator{
-				GenerateFunc: func(ctx context.Context, userID int64, role string) (string, error) {
+				GenerateAuthFunc: func(ctx context.Context, userID int64, role string) (string, error) {
 					return "aTokenToBeReturned", nil
 				},
 			},
@@ -235,7 +235,7 @@ func TestService_Login(t *testing.T) {
 			r: &MockRepo{
 				GetCredentialsByEmailFunc: func(ctx context.Context, email string) (domain.User, string, error) {
 					return domain.User{
-						ID: 1,
+						ID:   1,
 						Role: "user",
 					}, "aValidHash", nil
 				},
@@ -246,7 +246,7 @@ func TestService_Login(t *testing.T) {
 				},
 			},
 			t: &MockTKGenerator{
-				GenerateFunc: func(ctx context.Context, userID int64, role string) (string, error) {
+				GenerateAuthFunc: func(ctx context.Context, userID int64, role string) (string, error) {
 					return "aValidToken", nil
 				},
 			},
@@ -270,7 +270,7 @@ func TestService_Login(t *testing.T) {
 				},
 			},
 			t: &MockTKGenerator{
-				GenerateFunc: func(ctx context.Context, userID int64, role string) (string, error) {
+				GenerateAuthFunc: func(ctx context.Context, userID int64, role string) (string, error) {
 					return "aValidToken", nil
 				},
 			},
@@ -286,7 +286,7 @@ func TestService_Login(t *testing.T) {
 			r: &MockRepo{
 				GetCredentialsByEmailFunc: func(ctx context.Context, email string) (domain.User, string, error) {
 					return domain.User{
-						ID: 1,
+						ID:   1,
 						Role: "user",
 					}, "aValidHash", nil
 				},
@@ -297,7 +297,7 @@ func TestService_Login(t *testing.T) {
 				},
 			},
 			t: &MockTKGenerator{
-				GenerateFunc: func(ctx context.Context, userID int64, role string) (string, error) {
+				GenerateAuthFunc: func(ctx context.Context, userID int64, role string) (string, error) {
 					return "", errors.New("error")
 				},
 			},
