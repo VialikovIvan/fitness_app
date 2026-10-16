@@ -9,11 +9,12 @@ import (
 )
 
 var (
-	ErrInvalidPrice                   = errors.New("invalid price")
-	ErrInvalidCurrency                = errors.New("invalid currency")
-	ErrUserAlreadyHasActiveMembership = errors.New("user already has an active membership")
-	ErrPlanDoesNotExist               = errors.New("plan does not exist")
-	ErrInvalidWebhook                 = errors.New("invalid webhook")
+	ErrInvalidPrice                    = errors.New("invalid price")
+	ErrInvalidCurrency                 = errors.New("invalid currency")
+	ErrUserAlreadyHasActiveMembership  = errors.New("user already has an active membership")
+	ErrUserDoesNotHaveActiveMembership = errors.New("user does not have an active membership")
+	ErrPlanDoesNotExist                = errors.New("plan does not exist")
+	ErrInvalidWebhook                  = errors.New("invalid webhook")
 )
 
 type Plan struct {

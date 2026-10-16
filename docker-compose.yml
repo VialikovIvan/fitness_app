@@ -7,10 +7,12 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
       - RABBITMQ_URL=${RABBITMQ_URL}
-      - JWT_SECRET=${JWT_SECRET}
+      - JWT_AUTH_SECRET=${JWT_AUTH_SECRET}
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - BASE_URL=${BASE_URL}
+      - TURNSTILE_API_KEY=${TURNSTILE_API_KEY}
     depends_on:
       db:
         condition: service_healthy
