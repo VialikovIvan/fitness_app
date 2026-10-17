@@ -6,6 +6,11 @@ if [ -f .env ]; then
     echo "Existing .env backed up to .env.bak"
 fi
 
+if [ -f ./rabbitmq/definitions.json ]; then
+    cp ./rabbitmq/definitions.json ./rabbitmq/definitions.json.bak
+    echo "Existing definitions.json backed up to definitions.json.bak"
+fi
+
 cp .env.example .env
 
 read -p "Enter your Stripe secret key (If you don't have one yet, visit https://docs.stripe.com/keys): " STRIPE_SECRET_KEY
@@ -28,6 +33,9 @@ sed -i "s|your_db_password_here|$DB_PASSWORD|g" .env
 
 read -p "Choose a RabbitMQ password: " RABBIT_PASSWORD
 sed -i "s|your_rabbitmq_password_here|$RABBIT_PASSWORD|g" .env
+
+read -p "Choose a Grafana password: " GRAFANA_PASSWORD
+sed -i "s|your_grafana_password_here|$GRAFANA_PASSWORD|g" .env
 
 echo ".env configured! Proceeding to the next step.."
 

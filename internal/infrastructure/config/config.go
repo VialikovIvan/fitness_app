@@ -15,6 +15,7 @@ var (
 	ErrBaseURLVariableNotFound             = errors.New("expected .env variable not found: BASE_URL")
 	ErrRabbitMQURLVariableNotFound         = errors.New("expected .env variable not found: RABBITMQ_URL")
 	ErrTurnstileAPIKeyVariableNotFound     = errors.New("expected .env variable not found: TURNSTILE_API_KEY")
+	ErrGrafanaPasswordVariableNotFound     = errors.New("expected .env variable not found: GF_SECURITY_ADMIN_PASSWORD")
 )
 
 type Config struct {
@@ -28,6 +29,7 @@ type Config struct {
 	BaseURL             string
 	RabbitMQURL         string
 	TurnstileAPIKey     string
+	GrafanaPassword     string
 }
 
 func NewConfig() (*Config, error) {
@@ -41,6 +43,7 @@ func NewConfig() (*Config, error) {
 	baseURL := os.Getenv("BASE_URL")
 	rabbitMQURL := os.Getenv("RABBITMQ_URL")
 	turnstileAPIKey := os.Getenv("TURNSTILE_API_KEY")
+	grafanaPassword := os.Getenv("GF_SECURITY_ADMIN_PASSWORD")
 
 	if port == "" {
 		port = "8080"
@@ -65,6 +68,8 @@ func NewConfig() (*Config, error) {
 		return nil, ErrRabbitMQURLVariableNotFound
 	case turnstileAPIKey == "":
 		return nil, ErrTurnstileAPIKeyVariableNotFound
+	case grafanaPassword == "":
+		return nil, ErrGrafanaPasswordVariableNotFound
 	}
 
 	return &Config{
@@ -78,5 +83,6 @@ func NewConfig() (*Config, error) {
 		BaseURL:             baseURL,
 		RabbitMQURL:         rabbitMQURL,
 		TurnstileAPIKey:     turnstileAPIKey,
+		GrafanaPassword:     grafanaPassword,
 	}, nil
 }

@@ -10,6 +10,8 @@ An application for managing fitness club access with integrated payment system.
 - Docker
 - Stripe API
 - RabbitMQ 3.13
+- Prometheus 3.15
+- Grafana 13.2
 
 ## Requirements
 
@@ -58,3 +60,5 @@ stripe listen --forward-to localhost:8080/webhooks/stripe --all-snapshot
 | Redis | 6379 |
 | RabbitMQ AMQP | 5672 |
 | RabbitMQ UI | 15672 |
+| Prometheus | 9090 |
+| Grafana | 3000 |
