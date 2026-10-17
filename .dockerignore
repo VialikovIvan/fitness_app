@@ -22,4 +22,5 @@ Dockerfile
 setup.sh
 
 rabbitmq/definitions.json
+rabbitmq/definitions.json.bak
 rabbitmq/rabbitmq.conf
