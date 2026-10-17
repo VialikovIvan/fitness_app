@@ -4,3 +4,5 @@
 *.exe
 rabbitmq/definitions.json
 rabbitmq/definitions.json.bak
+metrics-token
+metrics-token.bak

@@ -24,3 +24,6 @@ setup.sh
 rabbitmq/definitions.json
 rabbitmq/definitions.json.bak
 rabbitmq/rabbitmq.conf
+
+metrics-token
+metrics-token.bak

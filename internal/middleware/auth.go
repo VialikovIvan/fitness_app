@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strings"
 )
 
 func (m *Manager) AuthOnly(next http.Handler) http.Handler {
@@ -46,13 +47,21 @@ func (m *Manager) GuestOnly(next http.Handler) http.Handler {
 	})
 }
 
-func (m *Manager) RequireAPIKey(next http.Handler) http.Handler {
+func (m *Manager) RequireBearer(next http.Handler, key string) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        key := r.Header.Get("X-API-Key")
-        if key != m.turnstileAPIKey {
-            http.Error(w, "Unauthorized", http.StatusUnauthorized)
-            return
-        }
+		auth := r.Header.Get("Authorization")
+		const prefix = "Bearer "
+		if !strings.HasPrefix(auth, prefix) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		gotKey := strings.TrimPrefix(auth, prefix)
+		if gotKey != key { 
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
         next.ServeHTTP(w, r)
     })
 }

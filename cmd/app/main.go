@@ -84,14 +84,14 @@ func main() {
 	stripeManager := mystripe.New(sc, cfg.BaseURL, cfg.StripeWebhookSecret)
 	rbtmqPublisher := myrabbitmq.NewPublisher(rbtmq)
 
-	mwManager := middleware.New(logger, cacher, tokenManager, cfg.TurnstileAPIKey)
+	mwManager := middleware.New(logger, cacher, tokenManager)
 
 	healthHandler := health.New()
 	membershipHandler, eventConsumer := membership.New(db, rbtmq, stripeManager, cacher, rbtmqPublisher, logger)
 	userHandler := user.New(db, tokenManager, logger)
 	qrcodeHandler := qrcode.New(db, tokenManager, cacher, logger, cfg.BaseURL)
 
-	router := myhttp.NewRouter(mwManager, healthHandler, membershipHandler, userHandler, qrcodeHandler)
+	router := myhttp.NewRouter(mwManager, healthHandler, membershipHandler, userHandler, qrcodeHandler, cfg.TurnstileAPIKey, cfg.MetricsAPIKey)
 	server := myhttp.NewServer(cfg.Port, router.Setup())
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

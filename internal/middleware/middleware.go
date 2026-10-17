@@ -18,17 +18,15 @@ type Manager struct {
 	logger          *slog.Logger
 	limiter         Limiter
 	tokenValidator  TokenValidator
-	turnstileAPIKey string
 	muMap           map[string]*sync.Mutex
 	muMapLock       sync.Mutex
 }
 
-func New(l *slog.Logger, lim Limiter, t TokenValidator, key string) *Manager {
+func New(l *slog.Logger, lim Limiter, t TokenValidator) *Manager {
 	return &Manager{
 		logger:          l,
 		limiter:         lim,
 		tokenValidator:  t,
-		turnstileAPIKey: key,
 		muMap:           make(map[string]*sync.Mutex),
 	}
 }
