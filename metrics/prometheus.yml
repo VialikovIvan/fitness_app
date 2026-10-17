@@ -14,5 +14,8 @@ scrape_configs:
   - job_name: 'app'
     static_configs:
       - targets: ['app:8080']
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics-token
     metrics_path: /metrics
     scrape_interval: 30s
