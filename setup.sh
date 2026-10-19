@@ -53,7 +53,7 @@ sed -i "s|your_rabbitmq_password_here|$RABBIT_PASSWORD|g" ./rabbitmq/definitions
 echo "definitions.json configured! Proceeding to the next step.."
 
 cp ./metrics/metrics-token.example ./metrics/metrics-token
-sed -i "s|your_metrics_api_key_here|$METRICS_API_KEY|g" .metrics/metrics-token
+sed -i "s|your_metrics_api_key_here|$METRICS_API_KEY|g" ./metrics/metrics-token
 echo "metrics-token configured! Proceeding to the next step.."
 
 echo "Open a new terminal tab and run the following command: 'stripe listen --forward-to localhost:8080/webhooks/stripe --all-snapshot'"
