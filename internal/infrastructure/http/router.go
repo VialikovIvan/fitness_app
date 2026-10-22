@@ -9,6 +9,7 @@ import (
 	"github.com/VialikovIvan/fitness_app/internal/middleware"
 	qrcode "github.com/VialikovIvan/fitness_app/internal/qrcode/transport"
 	user "github.com/VialikovIvan/fitness_app/internal/user/transport"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -21,10 +22,11 @@ type Router struct {
 	qrcode          *qrcode.Handler
 	turnstileAPIKey string
 	metricsAPIKey   string
+	reg             *prometheus.Registry
 }
 
 func NewRouter(mw *middleware.Manager, h *health.Handler, m *membership.Handler,
-	u *user.Handler, qr *qrcode.Handler, tKey string, mKey string) *Router {
+	u *user.Handler, qr *qrcode.Handler, tKey string, mKey string, reg *prometheus.Registry) *Router {
 	return &Router{
 		mw:              mw,
 		mux:             http.NewServeMux(),
@@ -34,6 +36,7 @@ func NewRouter(mw *middleware.Manager, h *health.Handler, m *membership.Handler,
 		qrcode:          qr,
 		turnstileAPIKey: tKey,
 		metricsAPIKey:   mKey,
+		reg:             reg,
 	}
 }
 
@@ -53,7 +56,7 @@ func (r *Router) Setup() http.Handler {
 
 	r.turnstileOnly("GET /access", r.qrcode.VerifyAccess)
 
-	r.metricsOnly("GET /metrics", promhttp.Handler().ServeHTTP)
+	r.metricsOnly("GET /metrics", promhttp.HandlerFor(r.reg, promhttp.HandlerOpts{}).ServeHTTP)
 
 	// Return globally wrapped
 	return chainMiddlewares(r.mux, r.mw.Recovery, r.mw.EnrichContext, r.mw.TrackRequest, r.mw.RateLimit)

@@ -135,6 +135,16 @@ func (m *MockPublisher) PublishStripeWebhook(ctx context.Context, event mbspDoma
 	return m.PublishStripeWebhookFunc(ctx, event)
 }
 
+type MockCheckoutsStartedCounter struct{}
+
+func (m *MockCheckoutsStartedCounter) Inc(planID string) {}
+
+type MockCheckoutsCompletedCounter struct{}
+
+func (m *MockCheckoutsCompletedCounter) Inc(planID string) {}
+
+var mockMetrics = service.NewMetricsManager(&MockCheckoutsStartedCounter{}, &MockCheckoutsCompletedCounter{})
+
 func TestService_CreatePlan(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -233,7 +243,7 @@ func TestService_CreatePlan(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := service.New(tt.r, &MockSubscriptionRepo{},
 				&MockMembershipRepo{}, &MockUserRepo{}, &MockPaymentRepo{},
-				&MockCache{}, tt.strp, &MockPublisher{}, logger)
+				&MockCache{}, tt.strp, &MockPublisher{}, logger, mockMetrics)
 
 			err := s.CreatePlan(t.Context(), tt.p)
 			if (err != nil) != tt.wantErr {
@@ -477,7 +487,7 @@ func TestService_CreateCheckoutSession(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := service.New(tt.pr, &MockSubscriptionRepo{},
 				tt.r, tt.ur, &MockPaymentRepo{}, tt.c,
-				tt.strp, &MockPublisher{}, logger)
+				tt.strp, &MockPublisher{}, logger, mockMetrics)
 
 			got, err := s.CreateCheckoutSession(t.Context(), tt.params)
 			if (err != nil) != tt.wantErr {
@@ -600,7 +610,7 @@ func TestService_HandleStripeWebhook(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := service.New(&MockPlanRepo{}, &MockSubscriptionRepo{},
 				&MockMembershipRepo{}, &MockUserRepo{},
-				&MockPaymentRepo{}, tt.c, tt.strp, tt.p, logger)
+				&MockPaymentRepo{}, tt.c, tt.strp, tt.p, logger, mockMetrics)
 
 			err := s.HandleStripeWebhook(t.Context(), body, sig)
 			if (err != nil) != tt.wantErr {
