@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -33,6 +34,8 @@ func (m *Manager) TrackRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
+		m.metrics.httpRequestsProcessing.Inc()
+
 		traceID, ok := GetTraceID(r)
 		if !ok {
 			traceID = ""
@@ -46,15 +49,22 @@ func (m *Manager) TrackRequest(next http.Handler) http.Handler {
 
 		sw := newStatusWriter(w)
 
-		next.ServeHTTP(sw, r)
+		defer func() {
+			duration := time.Since(start)
 
-		durationMS := time.Since(start).Milliseconds()
-		m.logger.Info("request processed",
-			"traceID", traceID,
-			"duration", durationMS,
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", sw.status,
-		)
+			m.logger.Info("request processed",
+				"traceID", traceID,
+				"duration", duration.Milliseconds(),
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", sw.status,
+			)
+
+			m.metrics.httpRequestDuration.Observe(r.Pattern, duration.Seconds())
+			m.metrics.httpRequestsTotal.Inc(r.Pattern, strconv.Itoa(sw.status))
+			m.metrics.httpRequestsProcessing.Dec()
+		}()
+
+		next.ServeHTTP(sw, r)
 	})
 }

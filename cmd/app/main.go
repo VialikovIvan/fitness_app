@@ -14,6 +14,7 @@ import (
 	"github.com/VialikovIvan/fitness_app/internal/infrastructure/config"
 	myhttp "github.com/VialikovIvan/fitness_app/internal/infrastructure/http"
 	"github.com/VialikovIvan/fitness_app/internal/infrastructure/postgres"
+	myprometheus "github.com/VialikovIvan/fitness_app/internal/infrastructure/prometheus"
 	myrabbitmq "github.com/VialikovIvan/fitness_app/internal/infrastructure/rabbitmq"
 	myredis "github.com/VialikovIvan/fitness_app/internal/infrastructure/redis"
 	mystripe "github.com/VialikovIvan/fitness_app/internal/infrastructure/stripe"
@@ -23,6 +24,7 @@ import (
 	"github.com/VialikovIvan/fitness_app/internal/qrcode"
 	"github.com/VialikovIvan/fitness_app/internal/user"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stripe/stripe-go/v86"
 )
 
@@ -77,6 +79,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	reg := prometheus.NewRegistry()
+	metricsManager := myprometheus.InitMetrics(reg)
+
 	sc := stripe.NewClient(cfg.StripeSecretKey)
 
 	cacher := myredis.NewCacher(rdb)
@@ -84,10 +89,12 @@ func main() {
 	stripeManager := mystripe.New(sc, cfg.BaseURL, cfg.StripeWebhookSecret)
 	rbtmqPublisher := myrabbitmq.NewPublisher(rbtmq)
 
-	mwManager := middleware.New(logger, cacher, tokenManager)
+	mvMetricsManager := middleware.NewMetricsManager(metricsManager.HTTPRequestsCounter,
+		metricsManager.HTTPRequestDurationHistogram, metricsManager.HTTPRequestsInFlightGauge)
+	mwManager := middleware.New(logger, cacher, tokenManager, mvMetricsManager)
 
 	healthHandler := health.New()
-	membershipHandler, eventConsumer := membership.New(db, rbtmq, stripeManager, cacher, rbtmqPublisher, logger)
+	membershipHandler, eventConsumer := membership.New(db, rbtmq, stripeManager, cacher, rbtmqPublisher, logger, metricsManager)
 	userHandler := user.New(db, tokenManager, logger)
 	qrcodeHandler := qrcode.New(db, tokenManager, cacher, logger, cfg.BaseURL)
 
