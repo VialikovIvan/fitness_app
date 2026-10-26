@@ -19,3 +19,7 @@ scrape_configs:
       credentials_file: /etc/prometheus/metrics-token
     metrics_path: /metrics
     scrape_interval: 30s
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']

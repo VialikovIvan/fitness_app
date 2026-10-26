@@ -67,6 +67,9 @@ services:
     image: prom/prometheus:v3.15.0
     ports:
       - "9090:9090"
+    depends_on:
+      cadvisor:
+        condition: service_started
     volumes:
       - prometheus_data:/prometheus
       - ./metrics/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -98,6 +101,16 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
 volumes:
   postgres_data:
   rabbitmq_data:
