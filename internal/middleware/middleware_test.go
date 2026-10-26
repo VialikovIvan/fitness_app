@@ -14,8 +14,6 @@ import (
 	"github.com/VialikovIvan/fitness_app/internal/middleware"
 )
 
-const turnstileAPIKey = "fakeKey"
-
 type MockLimiter struct {
 	AllowRequestByIPFunc func(ctx context.Context, ip string) (bool, error)
 }
@@ -31,6 +29,23 @@ type MockTokenValidator struct {
 func (m *MockTokenValidator) ValidateAuth(ctx context.Context, tokenStr string) (int64, string, error) {
 	return m.ValidateAuthFunc(ctx, tokenStr)
 }
+
+type MockHTTPRequestsCounter struct{}
+
+func (m *MockHTTPRequestsCounter) Inc(pattern, status string) {}
+
+type MockHTTPRequestDurationHistogram struct{}
+
+func (m *MockHTTPRequestDurationHistogram) Observe(pattern string, durationSeconds float64) {}
+
+type MockHTTPRequestsInFlightGauge struct{}
+
+func (m *MockHTTPRequestsInFlightGauge) Inc() {}
+
+func (m *MockHTTPRequestsInFlightGauge) Dec() {}
+
+var mockMetrics = middleware.NewMetricsManager(&MockHTTPRequestsCounter{},
+	&MockHTTPRequestDurationHistogram{}, &MockHTTPRequestsInFlightGauge{})
 
 func TestManager_Recovery(t *testing.T) {
 	tests := []struct {
@@ -58,7 +73,7 @@ func TestManager_Recovery(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := middleware.New(logger, &MockLimiter{}, &MockTokenValidator{}, turnstileAPIKey)
+			m := middleware.New(logger, &MockLimiter{}, &MockTokenValidator{}, mockMetrics)
 
 			handler := m.Recovery(tt.handler)
 
@@ -76,7 +91,7 @@ func TestManager_Recovery(t *testing.T) {
 
 func TestManager_EnrichContext(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	m := middleware.New(logger, &MockLimiter{}, &MockTokenValidator{}, turnstileAPIKey)
+	m := middleware.New(logger, &MockLimiter{}, &MockTokenValidator{}, mockMetrics)
 
 	handler := m.EnrichContext(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rawTraceID := r.Context().Value("traceID")
@@ -108,7 +123,7 @@ func TestManager_EnrichContext(t *testing.T) {
 func TestManager_TrackRequest(t *testing.T) {
 	var logBuffer bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logBuffer, nil))
-	m := middleware.New(logger, &MockLimiter{}, &MockTokenValidator{}, turnstileAPIKey)
+	m := middleware.New(logger, &MockLimiter{}, &MockTokenValidator{}, mockMetrics)
 
 	handler := m.TrackRequest(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -152,7 +167,7 @@ func TestManager_RateLimit(t *testing.T) {
 					AllowRequestByIPFunc: func(ctx context.Context, ip string) (bool, error) {
 						return true, nil
 					},
-				}, &MockTokenValidator{}, turnstileAPIKey)
+				}, &MockTokenValidator{}, mockMetrics)
 			},
 			wantStatus: 200,
 		},
@@ -163,7 +178,7 @@ func TestManager_RateLimit(t *testing.T) {
 					AllowRequestByIPFunc: func(ctx context.Context, ip string) (bool, error) {
 						return false, nil
 					},
-				}, &MockTokenValidator{}, turnstileAPIKey)
+				}, &MockTokenValidator{}, mockMetrics)
 			},
 			wantStatus: 429,
 		},
@@ -174,7 +189,7 @@ func TestManager_RateLimit(t *testing.T) {
 					AllowRequestByIPFunc: func(ctx context.Context, ip string) (bool, error) {
 						return true, errors.New("error")
 					},
-				}, &MockTokenValidator{}, turnstileAPIKey)
+				}, &MockTokenValidator{}, mockMetrics)
 			},
 			wantStatus: 200,
 		},
@@ -217,7 +232,7 @@ func TestManager_AuthOnly(t *testing.T) {
 					ValidateAuthFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
 						return 1, "user", nil
 					},
-				}, turnstileAPIKey)
+				}, mockMetrics)
 			},
 			cookieSetup: &http.Cookie{
 				Name:  "authToken",
@@ -233,7 +248,7 @@ func TestManager_AuthOnly(t *testing.T) {
 					ValidateAuthFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
 						return 0, "", nil
 					},
-				}, turnstileAPIKey)
+				}, mockMetrics)
 			},
 			wantStatus: 401,
 		},
@@ -244,7 +259,7 @@ func TestManager_AuthOnly(t *testing.T) {
 					ValidateAuthFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
 						return 0, "", errors.New("error")
 					},
-				}, turnstileAPIKey)
+				}, mockMetrics)
 			},
 			cookieSetup: &http.Cookie{
 				Name:  "authToken",
@@ -303,7 +318,7 @@ func TestManager_GuestOnly(t *testing.T) {
 					ValidateAuthFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
 						return 1, "user", nil
 					},
-				}, turnstileAPIKey)
+				}, mockMetrics)
 			},
 			wantStatus: 200,
 		},
@@ -314,7 +329,7 @@ func TestManager_GuestOnly(t *testing.T) {
 					ValidateAuthFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
 						return 0, "", errors.New("error")
 					},
-				},turnstileAPIKey)
+				}, mockMetrics)
 			},
 			cookieSetup: &http.Cookie{
 				Name:  "authToken",
@@ -329,7 +344,7 @@ func TestManager_GuestOnly(t *testing.T) {
 					ValidateAuthFunc: func(ctx context.Context, tokenStr string) (int64, string, error) {
 						return 1, "user", nil
 					},
-				}, turnstileAPIKey)
+				}, mockMetrics)
 			},
 			cookieSetup: &http.Cookie{
 				Name:  "authToken",
@@ -388,7 +403,7 @@ func TestManager_RequireAdmin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := middleware.New(logger, &MockLimiter{}, &MockTokenValidator{}, turnstileAPIKey)
+			m := middleware.New(logger, &MockLimiter{}, &MockTokenValidator{}, mockMetrics)
 
 			handler := m.RequireAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)

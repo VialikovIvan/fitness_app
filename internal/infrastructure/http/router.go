@@ -9,25 +9,34 @@ import (
 	"github.com/VialikovIvan/fitness_app/internal/middleware"
 	qrcode "github.com/VialikovIvan/fitness_app/internal/qrcode/transport"
 	user "github.com/VialikovIvan/fitness_app/internal/user/transport"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Router struct {
-	mw         *middleware.Manager
-	mux        *http.ServeMux
-	health     *health.Handler
-	user       *user.Handler
-	membership *membership.Handler
-	qrcode     *qrcode.Handler
+	mw              *middleware.Manager
+	mux             *http.ServeMux
+	health          *health.Handler
+	user            *user.Handler
+	membership      *membership.Handler
+	qrcode          *qrcode.Handler
+	turnstileAPIKey string
+	metricsAPIKey   string
+	reg             *prometheus.Registry
 }
 
-func NewRouter(mw *middleware.Manager, h *health.Handler, m *membership.Handler, u *user.Handler, qr *qrcode.Handler) *Router {
+func NewRouter(mw *middleware.Manager, h *health.Handler, m *membership.Handler,
+	u *user.Handler, qr *qrcode.Handler, tKey string, mKey string, reg *prometheus.Registry) *Router {
 	return &Router{
-		mw:         mw,
-		mux:        http.NewServeMux(),
-		health:     h,
-		membership: m,
-		user:       u,
-		qrcode:     qr,
+		mw:              mw,
+		mux:             http.NewServeMux(),
+		health:          h,
+		membership:      m,
+		user:            u,
+		qrcode:          qr,
+		turnstileAPIKey: tKey,
+		metricsAPIKey:   mKey,
+		reg:             reg,
 	}
 }
 
@@ -46,6 +55,8 @@ func (r *Router) Setup() http.Handler {
 	r.requireAdmin("POST /plans", r.membership.CreatePlan)
 
 	r.turnstileOnly("GET /access", r.qrcode.VerifyAccess)
+
+	r.metricsOnly("GET /metrics", promhttp.HandlerFor(r.reg, promhttp.HandlerOpts{}).ServeHTTP)
 
 	// Return globally wrapped
 	return chainMiddlewares(r.mux, r.mw.Recovery, r.mw.EnrichContext, r.mw.TrackRequest, r.mw.RateLimit)
@@ -68,7 +79,11 @@ func (r *Router) requireAdmin(pattern string, h func(http.ResponseWriter, *http.
 }
 
 func (r *Router) turnstileOnly(pattern string, h func(http.ResponseWriter, *http.Request)) {
-	r.mux.Handle(pattern, r.mw.RequireAPIKey(http.HandlerFunc(h)))
+	r.mux.Handle(pattern, r.mw.RequireBearer(http.HandlerFunc(h), r.turnstileAPIKey))
+}
+
+func (r *Router) metricsOnly(pattern string, h func(http.ResponseWriter, *http.Request)) {
+	r.mux.Handle(pattern, r.mw.RequireBearer(http.HandlerFunc(h), r.metricsAPIKey))
 }
 
 func chainMiddlewares(handler http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {

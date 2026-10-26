@@ -58,6 +58,26 @@ type Publisher interface {
 	PublishStripeWebhook(ctx context.Context, event mbspDomain.WebhookEvent) error
 }
 
+type CheckoutsStartedCounter interface {
+	Inc(planID string)
+}
+
+type CheckoutsCompletedCounter interface {
+	Inc(planID string)
+}
+
+type Metrics struct {
+	checkoutsStartedTotal   CheckoutsStartedCounter
+	checkoutsCompletedTotal CheckoutsCompletedCounter
+}
+
+func NewMetricsManager(csc CheckoutsStartedCounter, ccc CheckoutsCompletedCounter) *Metrics {
+	return &Metrics{
+		checkoutsStartedTotal:   csc,
+		checkoutsCompletedTotal: ccc,
+	}
+}
+
 type Service struct {
 	planRepo         PlanRepository
 	subscriptionRepo SubscriptionRepository
@@ -68,13 +88,14 @@ type Service struct {
 	stripe           Stripe
 	publisher        Publisher
 	logger           *slog.Logger
+	metrics          *Metrics
 	muMap            map[string]*sync.Mutex
 	muMapLock        sync.Mutex
 }
 
 func New(pr PlanRepository, sr SubscriptionRepository, mr MembershipRepository,
 	ur UserRepository, pmr PaymentRepository, c Cache, s Stripe, p Publisher,
-	l *slog.Logger) *Service {
+	l *slog.Logger, m *Metrics) *Service {
 	return &Service{
 		planRepo:         pr,
 		subscriptionRepo: sr,
@@ -85,6 +106,7 @@ func New(pr PlanRepository, sr SubscriptionRepository, mr MembershipRepository,
 		stripe:           s,
 		publisher:        p,
 		logger:           l.With("layer", "service"),
+		metrics:          m,
 		muMap:            make(map[string]*sync.Mutex),
 	}
 }
@@ -167,6 +189,8 @@ func (s *Service) CreateCheckoutSession(ctx context.Context, params mbspDomain.C
 		return "", fmt.Errorf("create checkout session: %w", err)
 	}
 
+	s.metrics.checkoutsStartedTotal.Inc(strconv.FormatInt(params.PlanID, 10))
+
 	if err := s.cache.SetCheckoutURL(ctx, uniqueIdx, params.URL); err != nil {
 		s.logger.Error("failed to cache checkout url", "err", err)
 	}
@@ -197,6 +221,8 @@ func (s *Service) HandleStripeWebhook(ctx context.Context, body []byte, sig stri
 }
 
 func (s *Service) HandleEventCheckoutCompleted(ctx context.Context, event mbspDomain.WebhookEvent) error {
+	s.metrics.checkoutsCompletedTotal.Inc(strconv.FormatInt(event.PlanID, 10))
+	
 	var err error
 	event.Payment.SubscriptionID, err = s.subscriptionRepo.CreateSubscription(ctx, event)
 	if err != nil {
