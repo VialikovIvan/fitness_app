@@ -6,6 +6,8 @@ import (
 	"sync"
 )
 
+const numLocks uint64 = 64
+
 type Limiter interface {
 	AllowRequestByIP(ctx context.Context, ip string) (bool, error)
 }
@@ -45,9 +47,8 @@ type Manager struct {
 	logger         *slog.Logger
 	limiter        Limiter
 	tokenValidator TokenValidator
-	muMap          map[string]*sync.Mutex
 	metrics        *Metrics
-	muMapLock      sync.Mutex
+	locks          [numLocks]sync.Mutex
 }
 
 func New(l *slog.Logger, lim Limiter, t TokenValidator, m *Metrics) *Manager {
@@ -56,6 +57,5 @@ func New(l *slog.Logger, lim Limiter, t TokenValidator, m *Metrics) *Manager {
 		limiter:        lim,
 		tokenValidator: t,
 		metrics:        m,
-		muMap:          make(map[string]*sync.Mutex),
 	}
 }

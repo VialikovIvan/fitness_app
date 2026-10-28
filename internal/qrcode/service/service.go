@@ -15,7 +15,10 @@ import (
 	"github.com/skip2/go-qrcode"
 )
 
-const relativeAccessPath = "/access"
+const (
+	relativeAccessPath = "/access"
+	numLocks int64 = 64
+)
 
 type MembershipRepository interface {
 	HasActiveMembershipByID(ctx context.Context, userID int64) (bool, error)
@@ -41,8 +44,7 @@ type Service struct {
 	cache          Cache
 	logger         *slog.Logger
 	baseURL        string
-	muMap          map[int64]*sync.Mutex
-	muMapLock      sync.Mutex
+	locks          [numLocks]sync.Mutex
 }
 
 func New(r MembershipRepository, t TokenManager, c Cache, l *slog.Logger, baseURL string) *Service {
@@ -52,7 +54,6 @@ func New(r MembershipRepository, t TokenManager, c Cache, l *slog.Logger, baseUR
 		cache:          c,
 		logger:         l.With("layer", "service"),
 		baseURL:        baseURL,
-		muMap:          make(map[int64]*sync.Mutex),
 	}
 }
 
@@ -146,10 +147,5 @@ func (s *Service) AllowAccess(ctx context.Context, token string) (bool, error) {
 }
 
 func (s *Service) getMutexByID(id int64) *sync.Mutex {
-	s.muMapLock.Lock()
-	defer s.muMapLock.Unlock()
-	if s.muMap[id] == nil {
-		s.muMap[id] = &sync.Mutex{}
-	}
-	return s.muMap[id]
+	return &s.locks[id%numLocks]
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -13,6 +14,8 @@ import (
 	mbspDomain "github.com/VialikovIvan/fitness_app/internal/membership/domain"
 	pmtDomain "github.com/VialikovIvan/fitness_app/internal/payment/domain"
 )
+
+const numLocks uint64 = 64
 
 type PlanRepository interface {
 	GetPlans(ctx context.Context) ([]mbspDomain.Plan, error)
@@ -89,8 +92,7 @@ type Service struct {
 	publisher        Publisher
 	logger           *slog.Logger
 	metrics          *Metrics
-	muMap            map[string]*sync.Mutex
-	muMapLock        sync.Mutex
+	locks            [numLocks]sync.Mutex
 }
 
 func New(pr PlanRepository, sr SubscriptionRepository, mr MembershipRepository,
@@ -107,7 +109,6 @@ func New(pr PlanRepository, sr SubscriptionRepository, mr MembershipRepository,
 		publisher:        p,
 		logger:           l.With("layer", "service"),
 		metrics:          m,
-		muMap:            make(map[string]*sync.Mutex),
 	}
 }
 
@@ -222,7 +223,7 @@ func (s *Service) HandleStripeWebhook(ctx context.Context, body []byte, sig stri
 
 func (s *Service) HandleEventCheckoutCompleted(ctx context.Context, event mbspDomain.WebhookEvent) error {
 	s.metrics.checkoutsCompletedTotal.Inc(strconv.FormatInt(event.PlanID, 10))
-	
+
 	var err error
 	event.Payment.SubscriptionID, err = s.subscriptionRepo.CreateSubscription(ctx, event)
 	if err != nil {
@@ -303,12 +304,9 @@ func (s *Service) HandleUnknownEvent(ctx context.Context, event mbspDomain.Webho
 }
 
 func (s *Service) getMutexByIdx(idx string) *sync.Mutex {
-	s.muMapLock.Lock()
-	defer s.muMapLock.Unlock()
-	if s.muMap[idx] == nil {
-		s.muMap[idx] = &sync.Mutex{}
-	}
-	return s.muMap[idx]
+	h := fnv.New64a()
+	h.Write([]byte(idx))
+	return &s.locks[h.Sum64()%numLocks]
 }
 
 func checkoutIdx(userID, planID int64) string {

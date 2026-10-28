@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"hash/fnv"
 	"net"
 	"net/http"
 	"sync"
@@ -14,7 +15,7 @@ func (m *Manager) RateLimit(next http.Handler) http.Handler {
 			userIP = r.RemoteAddr
 		}
 
-		mu := m.getMutexByIP(userIP)
+		mu := m.getLockByIP(userIP)
 
 		mu.Lock()
 		allowed, err := m.limiter.AllowRequestByIP(r.Context(), userIP)
@@ -33,11 +34,8 @@ func (m *Manager) RateLimit(next http.Handler) http.Handler {
 	})
 }
 
-func (m *Manager) getMutexByIP(ip string) *sync.Mutex {
-	m.muMapLock.Lock()
-	defer m.muMapLock.Unlock()
-	if m.muMap[ip] == nil {
-		m.muMap[ip] = &sync.Mutex{}
-	}
-	return m.muMap[ip]
+func (m *Manager) getLockByIP(ip string) *sync.Mutex {
+	h := fnv.New64a()
+	h.Write([]byte(ip))
+	return &m.locks[h.Sum64()%numLocks]
 }
