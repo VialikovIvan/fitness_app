@@ -51,6 +51,20 @@ In a separate terminal:
 stripe listen --forward-to localhost:8080/webhooks/stripe --all-snapshot
 ```
 
+## Stress-testing
+
+### 1. Run the app and wait until `docker compose ps` shows all services as `healthy`.
+
+```bash
+docker compose up -d
+```
+
+### 2. Run the stress test in a separate terminal
+
+```bash
+docker run --rm -i --network=fitness_app_default grafana/k6 run - < ./loadtest/stress-test.js
+```
+
 ## Ports
 
 | Service | Port |
