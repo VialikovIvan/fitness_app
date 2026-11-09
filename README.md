@@ -53,17 +53,41 @@ stripe listen --forward-to localhost:8080/webhooks/stripe --all-snapshot
 
 ## Stress-testing
 
-### 1. Run the app and wait until `docker compose ps` shows all services as `healthy`.
+### 1. Modify Register() and Login() in `internal/user/transport/handler.go`
+
+Set the Secure flag in cookie settings to false
+
+```Go
+cookie := http.Cookie{
+		Name:     "authToken",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteStrictMode,
+		Expires:  time.Now().Add(cookieValidityTime),
+	}
+```
+
+> ⚠️ **Remember to revert this change.** Leaving `Secure: false` in production 
+> allows cookies to be sent over plain HTTP, exposing auth tokens.
+
+### 2. Run the app and wait until `docker compose ps` shows all services as `healthy`.
 
 ```bash
 docker compose up -d
 ```
 
-### 2. Run the stress test in a separate terminal
+### 3. Run the stress test in a separate terminal
 
 ```bash
 docker run --rm -i --network=fitness_app_default grafana/k6 run - < ./loadtest/stress-test.js
 ```
+
+### 4. View results
+
+- **K6 Summary** — printed in the terminal after the test
+- **Grafana** — `http://localhost:3000` → dashboards
 
 ## Ports
 
