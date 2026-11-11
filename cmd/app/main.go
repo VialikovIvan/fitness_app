@@ -9,6 +9,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	
+	_ "net/http/pprof"
 
 	"github.com/VialikovIvan/fitness_app/internal/health"
 	"github.com/VialikovIvan/fitness_app/internal/infrastructure/config"
@@ -120,6 +122,15 @@ func main() {
 			os.Exit(1)
 		}
 	}()
+
+	if cfg.PprofEnabled {
+		go func() {
+			logger.Info("pprof server started", "addr", ":6060")
+			if err := http.ListenAndServe(":6060", nil); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logger.Error("pprof server error", "err", err)
+			}
+		}()
+	}
 
 	<-ctx.Done()
 	logger.Info("shutdown signal received")

@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"strconv"
 )
 
 var (
@@ -18,6 +19,7 @@ var (
 	ErrMetricsAPIKeyVariableNotFound       = errors.New("expected .env variable not found: METRICS_API_KEY")
 	ErrGrafanaPasswordVariableNotFound     = errors.New("expected .env variable not found: GF_SECURITY_ADMIN_PASSWORD")
 	ErrModeVariableInvalid                 = errors.New("expected .env variable not found or invalid: MODE")
+	ErrPprofEnabledVariableInvalid         = errors.New("expected .env variable not found or invalid: PPROF_ENABLED")
 )
 
 type Config struct {
@@ -34,6 +36,7 @@ type Config struct {
 	MetricsAPIKey       string
 	GrafanaPassword     string
 	Mode                string
+	PprofEnabled        bool
 }
 
 func NewConfig() (*Config, error) {
@@ -50,6 +53,7 @@ func NewConfig() (*Config, error) {
 	metricsAPIKey := os.Getenv("METRICS_API_KEY")
 	grafanaPassword := os.Getenv("GF_SECURITY_ADMIN_PASSWORD")
 	mode := os.Getenv("MODE")
+	pprofEnabled := os.Getenv("PPROF_ENABLED")
 
 	if port == "" {
 		port = "8080"
@@ -80,6 +84,13 @@ func NewConfig() (*Config, error) {
 		return nil, ErrGrafanaPasswordVariableNotFound
 	case mode != "test" && mode != "normal":
 		return nil, ErrModeVariableInvalid
+	case pprofEnabled != "true" && pprofEnabled != "false":
+		return nil, ErrPprofEnabledVariableInvalid
+	}
+
+	pprofEnabledBool, err := strconv.ParseBool(pprofEnabled)
+	if err != nil {
+		return nil, ErrPprofEnabledVariableInvalid
 	}
 
 	return &Config{
@@ -96,5 +107,6 @@ func NewConfig() (*Config, error) {
 		MetricsAPIKey:       metricsAPIKey,
 		GrafanaPassword:     grafanaPassword,
 		Mode:                mode,
+		PprofEnabled:        pprofEnabledBool,
 	}, nil
 }

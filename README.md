@@ -90,3 +90,4 @@ docker run --rm -i --network=fitness_app_default grafana/k6 run - < ./loadtest/s
 | RabbitMQ UI | 15672 |
 | Prometheus | 9090 |
 | Grafana | 3000 |
+| pprof | 6060 |
