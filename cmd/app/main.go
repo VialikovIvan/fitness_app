@@ -95,7 +95,7 @@ func main() {
 
 	healthHandler := health.New()
 	membershipHandler, eventConsumer := membership.New(db, rbtmq, stripeManager, cacher, rbtmqPublisher, logger, metricsManager)
-	userHandler := user.New(db, tokenManager, logger)
+	userHandler := user.New(db, tokenManager, logger, cfg.Mode)
 	qrcodeHandler := qrcode.New(db, tokenManager, cacher, logger, cfg.BaseURL)
 
 	router := myhttp.NewRouter(mwManager, healthHandler, membershipHandler,

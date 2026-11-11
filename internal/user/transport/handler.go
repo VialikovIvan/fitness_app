@@ -30,13 +30,15 @@ type Handler struct {
 	service  AuthService
 	validate Validator
 	logger   *slog.Logger
+	mode     string
 }
 
-func New(svc AuthService, v Validator, l *slog.Logger) *Handler {
+func New(svc AuthService, v Validator, l *slog.Logger, mode string) *Handler {
 	return &Handler{
 		service:  svc,
 		validate: v,
 		logger:   l.With("layer", "transport"),
+		mode:     mode,
 	}
 }
 
@@ -104,7 +106,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   h.mode != "test", // If test mode, false. Else, true
 		SameSite: http.SameSiteStrictMode,
 		Expires:  time.Now().Add(cookieValidityTime),
 	}
@@ -165,7 +167,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   h.mode != "test", // If test mode, false. Else, true
 		SameSite: http.SameSiteStrictMode,
 		Expires:  time.Now().Add(cookieValidityTime),
 	}
@@ -198,7 +200,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   h.mode != "test", // If test mode, false. Else, true
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1,
 	}

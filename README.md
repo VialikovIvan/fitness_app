@@ -53,23 +53,13 @@ stripe listen --forward-to localhost:8080/webhooks/stripe --all-snapshot
 
 ## Stress-testing
 
-### 1. Modify Register() and Login() in `internal/user/transport/handler.go`
+### 1. Change app mode in `.env`
 
-Set the Secure flag in cookie settings to false
-
-```Go
-cookie := http.Cookie{
-		Name:     "authToken",
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteStrictMode,
-		Expires:  time.Now().Add(cookieValidityTime),
-	}
+```bash
+MODE=test
 ```
 
-> ⚠️ **Remember to revert this change.** Leaving `Secure: false` in production 
+> ⚠️ **Remember to revert this change.** Leaving `MODE=test` in production 
 > allows cookies to be sent over plain HTTP, exposing auth tokens.
 
 ### 2. Run the app and wait until `docker compose ps` shows all services as `healthy`.

@@ -17,6 +17,7 @@ var (
 	ErrTurnstileAPIKeyVariableNotFound     = errors.New("expected .env variable not found: TURNSTILE_API_KEY")
 	ErrMetricsAPIKeyVariableNotFound       = errors.New("expected .env variable not found: METRICS_API_KEY")
 	ErrGrafanaPasswordVariableNotFound     = errors.New("expected .env variable not found: GF_SECURITY_ADMIN_PASSWORD")
+	ErrModeVariableInvalid                 = errors.New("expected .env variable not found or invalid: MODE")
 )
 
 type Config struct {
@@ -32,6 +33,7 @@ type Config struct {
 	TurnstileAPIKey     string
 	MetricsAPIKey       string
 	GrafanaPassword     string
+	Mode                string
 }
 
 func NewConfig() (*Config, error) {
@@ -47,6 +49,7 @@ func NewConfig() (*Config, error) {
 	turnstileAPIKey := os.Getenv("TURNSTILE_API_KEY")
 	metricsAPIKey := os.Getenv("METRICS_API_KEY")
 	grafanaPassword := os.Getenv("GF_SECURITY_ADMIN_PASSWORD")
+	mode := os.Getenv("MODE")
 
 	if port == "" {
 		port = "8080"
@@ -75,6 +78,8 @@ func NewConfig() (*Config, error) {
 		return nil, ErrMetricsAPIKeyVariableNotFound
 	case grafanaPassword == "":
 		return nil, ErrGrafanaPasswordVariableNotFound
+	case mode != "test" && mode != "normal":
+		return nil, ErrModeVariableInvalid
 	}
 
 	return &Config{
@@ -90,5 +95,6 @@ func NewConfig() (*Config, error) {
 		TurnstileAPIKey:     turnstileAPIKey,
 		MetricsAPIKey:       metricsAPIKey,
 		GrafanaPassword:     grafanaPassword,
+		Mode:                mode,
 	}, nil
 }

@@ -12,13 +12,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func New(db *pgxpool.Pool, tokens *myjwt.Manager, l *slog.Logger) *transport.Handler {
+func New(db *pgxpool.Pool, tokens *myjwt.Manager, l *slog.Logger, mode string) *transport.Handler {
 	l = l.With("feature", "user")
 	repo := repository.NewPostgres(db)
 	hasher := crypto.NewArgon2()
 	svc := service.New(repo, hasher, tokens)
 	v := validator.New()
-	handler := transport.New(svc, v, l)
+	handler := transport.New(svc, v, l, mode)
 
 	return handler
 }
