@@ -16,6 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const mode string = "normal"
+
 type MockService struct {
 	RegisterFunc func(ctx context.Context, u domain.User, plainPassword string) (string, error)
 	LoginFunc    func(ctx context.Context, u domain.User, plainPassword string) (string, error)
@@ -93,7 +95,7 @@ func TestHandler_Register(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := transport.New(tt.s, validator.New(), logger)
+			h := transport.New(tt.s, validator.New(), logger, mode)
 
 			req := httptest.NewRequest("POST", "/register", strings.NewReader(tt.body))
 			rr := httptest.NewRecorder()
@@ -193,7 +195,7 @@ func TestHandler_Login(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := transport.New(tt.s, validator.New(), logger)
+			h := transport.New(tt.s, validator.New(), logger, mode)
 
 			req := httptest.NewRequest("POST", "/login", strings.NewReader(tt.body))
 			rr := httptest.NewRecorder()
@@ -236,7 +238,7 @@ func TestHandler_Logout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := transport.New(&MockService{}, validator.New(), logger)
+			h := transport.New(&MockService{}, validator.New(), logger, mode)
 
 			req := httptest.NewRequest("POST", "/logout", http.NoBody)
 			rr := httptest.NewRecorder()
