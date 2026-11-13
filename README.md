@@ -2,6 +2,17 @@
 
 An application for managing fitness club access with integrated payment system.
 
+<div>
+
+**Grafana dashboard (left) vs. k6 test results (right)**
+
+<img src="metrics/screenshots/dashboards.png" alt="Grafana dashboard" width="45%" align="middle">
+<img src="metrics/screenshots/stress_test_results.png" alt="K6 results" width="45%" align="middle">
+
+</div>
+
+*Increase in latency is caused by Stripe API calls.*
+
 ## Tech Stack
 
 - Go 1.26
@@ -12,6 +23,7 @@ An application for managing fitness club access with integrated payment system.
 - RabbitMQ 3.13
 - Prometheus 3.15
 - Grafana 13.2
+- K6 2.3
 
 ## Requirements
 
@@ -51,7 +63,15 @@ In a separate terminal:
 stripe listen --forward-to localhost:8080/webhooks/stripe --all-snapshot
 ```
 
-## Stress-testing
+## Load testing
+
+**CPU spike during test (top) vs. pprof showing Argon2 as the reason (bottom)**
+
+<img src="metrics/screenshots/cpu_usage_graph.png" alt="CPU usage graph">
+<img src="metrics/screenshots/pprof_cpu_usage_breakdown.png" alt="pprof" width="45%">
+
+*At 8 registrations/sec, CPU hit 98%. Profiling shows ~75% of that
+is Argon2 password hashing — by design, not a bug.*
 
 ### 1. Change app mode in `.env`
 
