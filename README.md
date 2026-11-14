@@ -12,6 +12,18 @@ An application for managing fitness club access with integrated payment system.
 </div>
 
 *Increase in latency is caused by Stripe API calls.*
+*Rate limiting was disabled during the test to measure actual application throughput.*
+
+## Features
+
+- User authentication and role-based access control
+- Membership management
+- Stripe subscription billing
+- QR-based gym access
+- Asynchronous payment events processing
+- Custom middleware, including rate limiting
+- Metrics and monitoring
+- Customizable load testing
 
 ## Tech Stack
 
@@ -36,7 +48,7 @@ stripe login
 
 ## First start (localhost)
 
-### 1. Clone the repository.
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/VialikovIvan/fitness_app.git
@@ -82,7 +94,7 @@ MODE=test
 > ⚠️ **Remember to revert this change.** Leaving `MODE=test` in production 
 > allows cookies to be sent over plain HTTP, exposing auth tokens.
 
-### 2. Run the app and wait until `docker compose ps` shows all services as `healthy`.
+### 2. Run the app and wait until `docker compose ps` shows all services as `healthy`
 
 ```bash
 docker compose up -d
